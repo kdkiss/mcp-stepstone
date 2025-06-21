@@ -2,8 +2,8 @@
 	"name": "mcp-stepstone",
 	"version": "1.1.0",
 	"description": "MCP-compatible job listing fetcher for Stepstone.de using MCP SDK",
-	"main": "index.ts",
-	"module": "index.ts",
+	"main": "src/index.ts",
+	"module": "src/index.ts",
 	"type": "module",
 	"scripts": {
 		"dev": "npx @smithery/cli dev",
