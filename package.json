@@ -1,0 +1,12 @@
+{
+  "name": "mcp-stepstone",
+  "version": "1.0.0",
+  "bin": {
+    "mcp-stepstone": "./index.js"
+  },
+  "author": "kdkiss",
+  "license": "MIT",
+  "keywords": ["mcp", "stepstone", "cli"],
+  "scripts": {},
+  "dependencies": {}
+}
