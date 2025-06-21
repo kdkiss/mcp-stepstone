@@ -1,50 +1,60 @@
-#!/usr/bin/env python3
-from jsonrpcserver import method, serve
+import sys
 import json
-from job_fetcher import fetch_job_listings, build_url
+import requests
+from bs4 import BeautifulSoup
+import re
+from urllib.parse import quote
 
-DEFAULT_TERMS = ["fraud", "crime", "betrug", "fraud_specialist"]
-DEFAULT_ZIP = "40210"
-DEFAULT_RADIUS = 5
+def fetch_job_listings(url):
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    try:
+        r = requests.get(url, headers=headers)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        container = soup.find('div', id='app-unifiedResultlist')
+        if not container:
+            return []
+        jobs = []
+        seen = set()
+        for article in container.find_all('article', attrs={'data-testid': 'job-item'}):
+            a = article.find('a')
+            if not a:
+                continue
+            title = a.text.strip()
+            link = a['href']
+            if not link.startswith("http"):
+                link = f"https://www.stepstone.de{link}"
+            if link in seen:
+                continue
+            seen.add(link)
+            company = article.find('span', class_=re.compile('res-1bl90s9|company'))
+            location = article.find('span', class_=re.compile('res-skl634|location'))
+            jobs.append({
+                "title": title,
+                "company": company.text.strip() if company else "Unknown Company",
+                "location": location.text.strip() if location else "Unknown Location",
+                "link": link
+            })
+        return jobs
+    except Exception:
+        return []
 
-@method
-def initialize(params=None):
-    return {"status": "initialized"}
+def build_url(term, zip_code, radius):
+    q = quote(term)
+    return f"https://www.stepstone.de/jobs/{q}/in-{zip_code}?radius={radius}&searchOrigin=Homepage_top-search&q=%22{q}%22"
 
-@method
-def tools__list(params=None):
-    return [{
-        "name": "fetch_jobs",
-        "description": "Fetch job listings from Stepstone.de",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "search_terms": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Keywords"
-                },
-                "zip_code": {"type": "string", "description": "ZIP code"},
-                "radius": {"type": "integer", "description": "Radius (km)"}
-            }
-        }
-    }]
-
-@method
-def tools__call(params):
-    if params["name"] != "fetch_jobs":
-        return {"error": "Unknown tool"}
-    args = params.get("args", {})
-    terms = args.get("search_terms", DEFAULT_TERMS)
-    zip_code = args.get("zip_code", DEFAULT_ZIP)
-    radius = args.get("radius", DEFAULT_RADIUS)
+def main():
+    data = json.load(sys.stdin)
+    terms = data.get("search_terms", ["fraud", "crime", "betrug", "fraud_specialist"])
+    zip_code = data.get("zip_code", "40210")
+    radius = data.get("radius", 5)
 
     results = {}
     for term in terms:
         url = build_url(term, zip_code, radius)
         jobs = fetch_job_listings(url)
         results[term] = jobs
-    return {"results": results}
+
+    json.dump({"results": results}, sys.stdout)
 
 if __name__ == "__main__":
-    serve()
+    main()
