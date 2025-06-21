@@ -2,6 +2,7 @@
 
 # 🧠 mcp-stepstone
 
+[![smithery badge](https://smithery.ai/badge/@kdkiss/mcp-stepstone)](https://smithery.ai/server/@kdkiss/mcp-stepstone)
 **`mcp-stepstone`** is an MCP-compatible CLI module that fetches job listings from [Stepstone.de](https://www.stepstone.de) based on dynamic keywords and location parameters.
 
 Designed to integrate seamlessly into autonomous agents or automation workflows using `stdin/stdout` for communication.
@@ -18,6 +19,15 @@ Designed to integrate seamlessly into autonomous agents or automation workflows 
 
 ## 📦 Installation & Usage
 
+### Installing via Smithery
+
+To install Stepstone Job Listings Fetcher for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@kdkiss/mcp-stepstone):
+
+```bash
+npx -y @smithery/cli install @kdkiss/mcp-stepstone --client claude
+```
+
+### Installing manually
 You can use it directly with `npx`:
 
 ```bash
@@ -119,6 +129,7 @@ Make sure you have Python 3 installed, as the core scraper is Python-based.
 * [ ] Add file export support (`--output jobs.json`)
 * [ ] Support non-German zip/postal codes
 * [ ] Date-based filtering (if supported)
+
 
 
 
