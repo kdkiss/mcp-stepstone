@@ -1,12 +1,19 @@
 {
   "name": "mcp-stepstone",
-  "version": "1.0.0",
+  "version": "1.0.11",
+  "description": "MCP-compatible job listing fetcher for Stepstone.de",
   "bin": {
     "mcp-stepstone": "./index.js"
   },
   "author": "kdkiss",
   "license": "MIT",
-  "keywords": ["mcp", "stepstone", "cli"],
-  "scripts": {},
+  "type": "module",
+  "keywords": [
+    "mcp",
+    "stepstone",
+    "job",
+    "cli",
+    "automation"
+  ],
   "dependencies": {}
 }
