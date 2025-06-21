@@ -6,24 +6,24 @@
 	"module": "index.ts",
 	"type": "module",
 	"scripts": {
-	  "dev": "npx @smithery/cli dev",
-	  "start": "tsx index.ts"
+		"dev": "npx @smithery/cli dev",
+		"start": "tsx index.ts"
 	},
 	"keywords": [
-	  "mcp",
-	  "stepstone",
-	  "jobs",
-	  "automation"
+		"mcp",
+		"stepstone",
+		"jobs",
+		"automation"
 	],
 	"author": "kdkiss",
 	"license": "MIT",
 	"dependencies": {
-	  "@modelcontextprotocol/sdk": "^1.12.1",
-	  "zod": "^3.25.46"
+		"@modelcontextprotocol/sdk": "^1.12.1",
+		"zod": "^3.25.46"
 	},
 	"devDependencies": {
-	  "@smithery/cli": "^1.2.4",
-	  "tsx": "^4.19.4"
+		"@smithery/cli": "^1.2.4",
+		"@types/node": "^24.0.3",
+		"tsx": "^4.19.4"
 	}
-  }
-  
+}
