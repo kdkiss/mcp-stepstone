@@ -1,6 +1,6 @@
 name: mcp-stepstone
 type: mcp-server
 runtime: typescript
-entrypoint: tsx index.ts
+entrypoint: tsx src/index.ts
 tools:
   - fetch_jobs
