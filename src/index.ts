@@ -1,10 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { serveHttp } from "@modelcontextprotocol/sdk/server/http.js";
 import { z } from "zod";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
-// Required to resolve local script path in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -12,7 +12,7 @@ export const configSchema = z.object({
   debug: z.boolean().default(false).describe("Enable debug logging"),
 });
 
-export default function createStatelessServer({
+export default async function createServer({
   config,
 }: {
   config: z.infer<typeof configSchema>;
@@ -67,5 +67,5 @@ export default function createStatelessServer({
     }
   );
 
-  return server.server;
+  await serveHttp(server.server, { port: 8080 });
 }
