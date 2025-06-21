@@ -7,7 +7,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "npx @smithery/cli dev",
-		"start": "tsx index.ts"
+		"start": "tsx src/index.ts"
 	},
 	"keywords": [
 		"mcp",
