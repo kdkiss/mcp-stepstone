@@ -1,6 +1,0 @@
-name: mcp-stepstone
-type: mcp-server
-runtime: python
-entrypoint: python3 mcp_server.py
-tools:
-  - fetch_jobs
