@@ -191,6 +191,8 @@ async def handle_list_tools() -> list[Tool]:
 @server.call_tool()
 async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     """Handle tool calls"""
+    logger.info(f"Tool called: {name} with arguments: {arguments}")
+    
     if name == "search_jobs":
         # Extract parameters with defaults
         search_terms = arguments.get("search_terms", ["fraud", "betrug", "compliance"])
