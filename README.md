@@ -2,7 +2,11 @@
 
 A Model Context Protocol (MCP) server for searching job listings on Stepstone.de. This server transforms job search functionality into a tool that can be used with MCP-compatible clients like Smithery, Claude Desktop, and other AI assistants.
 
+[![smithery badge](https://smithery.ai/badge/@kdkiss/mcp-stepstone)](https://smithery.ai/server/@kdkiss/mcp-stepstone)
+**`mcp-stepstone`** is an MCP-compatible CLI module that fetches job listings from [Stepstone.de](https://www.stepstone.de) based on dynamic keywords and location parameters.
+
 ## Features
+
 
 - 🔍 Search job listings on Stepstone.de using multiple search terms
 - 📍 Location-based search with German postal codes
@@ -18,6 +22,20 @@ A Model Context Protocol (MCP) server for searching job listings on Stepstone.de
 
 - Python 3.8 or higher
 - pip package manager
+
+
+## 📦 Installation & Usage
+
+### Installing via Smithery
+
+To install Stepstone Job Listings Fetcher for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@kdkiss/mcp-stepstone):
+
+```bash
+npx -y @smithery/cli install @kdkiss/mcp-stepstone --client claude
+```
+
+### Installing manually
+You can use it directly with `npx`:
 
 ### Step 1: Install Dependencies
 
@@ -306,6 +324,7 @@ For issues and questions:
 
 
 - [Claude Desktop](https://claude.ai/desktop) - Desktop client with MCP support
+
 
 
 
