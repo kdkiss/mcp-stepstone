@@ -14,3 +14,4 @@ RUN pip install --no-cache-dir requests beautifulsoup4 mcp
 
 # default command
 ENTRYPOINT ["python", "stepstone_server.py"]
+

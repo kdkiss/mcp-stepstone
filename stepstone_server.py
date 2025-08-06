@@ -59,7 +59,10 @@ class StepstoneJobScraper:
                 if not job_link:
                     continue
                 
-                title = job_link.text.strip()
+                # Extract job title from the link text or h2 element
+                title_elem = article.find('h2') or job_link
+                title = title_elem.get_text(strip=True) if title_elem else "Unknown Title"
+                
                 link = job_link['href']
                 
                 # Ensure absolute URL
@@ -72,17 +75,17 @@ class StepstoneJobScraper:
                 seen_links.add(link)
                 
                 # Extract company information
-                company_elem = article.find('span', class_=re.compile('res-1bl90s9|company'))
-                company = company_elem.text.strip() if company_elem else "Unknown Company"
+                company_elem = article.find('span', class_=re.compile('res-1bl90s9|company')) or article.find('a', attrs={'data-testid': 'company-name'})
+                company = company_elem.get_text(strip=True) if company_elem else "Unknown Company"
                 
-                # Extract location information
-                location_elem = article.find('span', class_=re.compile('res-skl634|location'))
-                location = location_elem.text.strip() if location_elem else "Unknown Location"
+                # Extract short description
+                desc_elem = article.find('p', class_=re.compile('description|snippet')) or article.find('div', class_=re.compile('description|snippet'))
+                description = desc_elem.get_text(strip=True)[:200] + "..." if desc_elem and desc_elem.get_text(strip=True) else "No description available"
                 
                 jobs.append({
                     "title": title,
                     "company": company,
-                    "location": location,
+                    "description": description,
                     "link": link
                 })
             
@@ -188,6 +191,8 @@ async def handle_list_tools() -> list[Tool]:
 @server.call_tool()
 async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     """Handle tool calls"""
+    logger.info(f"Tool called: {name} with arguments: {arguments}")
+    
     if name == "search_jobs":
         # Extract parameters with defaults
         search_terms = arguments.get("search_terms", ["fraud", "betrug", "compliance"])
@@ -232,7 +237,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                     for i, job in enumerate(jobs, 1):
                         formatted_output.append(f"\n{i}. {job['title']}")
                         formatted_output.append(f"   Company: {job['company']}")
-                        formatted_output.append(f"   Location: {job['location']}")
+                        formatted_output.append(f"   Description: {job['description']}")
                         formatted_output.append(f"   Link: {job['link']}")
             
             # Add summary
