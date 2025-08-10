@@ -19,6 +19,7 @@ A Model Context Protocol (MCP) server for searching job listings on Stepstone.de
 - 🏗️ **MCP Compliant**: Full Model Context Protocol implementation
 - 🐳 **Docker Ready**: Containerized deployment support
 - 🔧 **Configurable**: Environment-based configuration for production use
+- 📝 **Follow-up Questions**: Get detailed job information after initial searches
 
 ## 🚀 Quick Start
 
@@ -127,6 +128,15 @@ Search for job listings using multiple search terms with location-based filterin
   - Default: `5`
   - Range: 1-100 km
 
+#### `get_job_details`
+Get detailed information about a specific job from previous search results.
+
+**Parameters:**
+- `query` (string, required): Job title or company name to match against previous search results
+  - Example: `"AML Specialist"` or `"Deutsche Bank AG"`
+- `session_id` (string, required): Session ID from previous search results
+  - Example: `"550e8400-e29b-41d4-a716-446655440000"`
+
 ### Example Usage
 
 #### Basic Search
@@ -163,12 +173,26 @@ Search for job listings using multiple search terms with location-based filterin
 }
 ```
 
+#### Follow-up Questions - Get Job Details
+```json
+{
+  "tool": "get_job_details",
+  "parameters": {
+    "query": "AML Specialist",
+    "session_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+```
+
 ### Sample Output
+
+#### Search Results
 ```
 Job Search Summary:
 Search Terms: fraud analyst, compliance officer
 Location: 60329 (±25km)
 Total Jobs Found: 23
+Session ID: 550e8400-e29b-41d4-a716-446655440000
 
 --- Results for 'fraud analyst' ---
 
@@ -185,6 +209,34 @@ Total Jobs Found: 23
    Link: https://www.stepstone.de/stellenangebote--Fraud-Detection-Specialist-Frankfurt-Commerzbank--1234568
 ```
 
+#### Detailed Job Information
+```
+Job Details: Senior Fraud Analyst - Digital Banking
+Company: Deutsche Bank AG
+Location: Frankfurt am Main
+Salary: €65,000 - €85,000 per year
+Job Type: Full-time, Permanent
+
+Full Description:
+Join our fraud prevention team to analyze transaction patterns and develop detection algorithms...
+
+Requirements:
+- Bachelor's degree in Computer Science, Finance, or related field
+- 3+ years experience in fraud detection or financial crime prevention
+- Strong analytical skills with SQL, Python, or R
+- Knowledge of AML regulations and compliance frameworks
+
+Benefits:
+- Competitive salary with annual bonus
+- Flexible working hours and remote work options
+- Professional development opportunities
+- Comprehensive health insurance
+
+Application Instructions:
+Apply directly through the link or send your CV to careers@deutschebank.com
+Contact: recruitment@deutschebank.com
+```
+
 ## 🏗️ Technical Architecture
 
 ### System Design
@@ -194,12 +246,12 @@ Total Jobs Found: 23
 │ (Claude/Smithery) │    │     Server       │    │   (Job Portal)  │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
                                 │
-                       ┌──────────────────┐
-                       │  Job Scraper     │
-                       │  - URL Builder   │
-                       │  - HTML Parser   │
-                       │  - Data Cleaner  │
-                       └──────────────────┘
+                        ┌──────────────────┐
+                        │  Job Scraper     │
+                        │  - URL Builder   │
+                        │  - HTML Parser   │
+                        │  - Data Cleaner  │
+                        └──────────────────┘
 ```
 
 ### Data Flow
@@ -208,7 +260,9 @@ Total Jobs Found: 23
 3. **URL Construction**: Builds Stepstone.de search URLs
 4. **Web Scraping**: Fetches and parses job listings
 5. **Data Processing**: Extracts and structures job information
-6. **Response**: Returns formatted results to MCP client
+6. **Session Creation**: Stores search results for follow-up queries
+7. **Response**: Returns formatted results to MCP client
+8. **Follow-up**: Uses session data to retrieve detailed job information
 
 ### Key Components
 
@@ -219,10 +273,27 @@ Total Jobs Found: 23
   - `fetch_job_listings()`: Scrapes job data from Stepstone
   - `search_jobs()`: Orchestrates multi-term searches
 
+#### JobDetailParser ([`job_detail_parser.py:1`](job_detail_parser.py:1))
+- **Purpose**: Extracts detailed job information from individual job pages
+- **Features**:
+  - Full job description parsing
+  - Salary information extraction
+  - Requirements and qualifications parsing
+  - Company details and contact information
+  - Application instructions extraction
+
+#### SessionManager ([`session_manager.py:1`](session_manager.py:1))
+- **Purpose**: Manages search sessions for follow-up queries
+- **Features**:
+  - UUID-based session identification
+  - 1-hour TTL for session cleanup
+  - Job result storage and retrieval
+  - Fuzzy matching for job queries
+
 #### MCP Server ([`stepstone_server.py:119`](stepstone_server.py:119))
 - **Purpose**: MCP protocol implementation
 - **Features**:
-  - Tool registration (`search_jobs`)
+  - Tool registration (`search_jobs`, `get_job_details`)
   - Resource management (`stepstone://search-help`)
   - Error handling and validation
   - Logging and monitoring
@@ -248,6 +319,12 @@ Total Jobs Found: 23
 - Error handling for blocked requests
 
 ## ⚡ Performance Optimization
+
+### Session Management
+- In-memory session storage with TTL
+- Automatic cleanup of expired sessions
+- Efficient job matching algorithms
+- Minimal memory footprint
 
 ### Caching Strategy (Future Enhancement)
 - Redis-based caching for frequent searches
@@ -299,6 +376,35 @@ LOG_LEVEL=DEBUG python stepstone_server.py
 
 # Test specific search
 echo '{"search_terms": ["test"], "zip_code": "40210"}' | python stepstone_server.py
+
+# Test follow-up functionality
+python -c "
+import asyncio
+from stepstone_server import handle_call_tool
+
+async def test():
+    # Search for jobs
+    search_result = await handle_call_tool('search_jobs', {
+        'search_terms': ['python developer'],
+        'zip_code': '10115',
+        'max_results': 3
+    })
+    print('Search completed')
+    
+    # Extract session ID from search result
+    import re
+    session_match = re.search(r'Session ID: ([a-f0-9-]+)', search_result)
+    if session_match:
+        session_id = session_match.group(1)
+        # Get job details
+        details = await handle_call_tool('get_job_details', {
+            'query': 'python developer',
+            'session_id': session_id
+        })
+        print('Job details retrieved')
+
+asyncio.run(test())
+"
 ```
 
 ### Debug Mode
@@ -436,7 +542,14 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 📈 Version History
 
-### v1.1.0 (Current)
+### v1.2.0 (Current)
+- **NEW**: Follow-up questions feature with `get_job_details` tool
+- **NEW**: Session management for tracking search results
+- **NEW**: Detailed job information extraction
+- **NEW**: Job detail parser with comprehensive data extraction
+- **ENHANCED**: Search results now include session IDs for follow-up queries
+
+### v1.1.0
 - Enhanced documentation and examples
 - Added Docker support
 - Improved error handling
