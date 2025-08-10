@@ -1,3 +1,4 @@
 .smithery
 node_modules
 .env
+__pycache__/stepstone_server.cpython-311.pyc

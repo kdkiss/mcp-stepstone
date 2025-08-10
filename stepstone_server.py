@@ -55,13 +55,47 @@ class StepstoneJobScraper:
             seen_links = set()
             
             for article in container.find_all('article', attrs={'data-testid': 'job-item'}):
-                job_link = article.find('a')
+                # Find all links in the article
+                all_links = article.find_all('a', href=True)
+                
+                job_link = None
+                job_title = None
+                
+                # First, look for job posting links with the correct pattern
+                for link_elem in all_links:
+                    href = link_elem.get('href', '')
+                    
+                    # Check for actual job posting URLs (contain stellenangebote and inline.html)
+                    if re.search(r'/stellenangebote--.*--\d+-inline\.html', href):
+                        job_link = link_elem
+                        job_title = link_elem.get_text(strip=True)
+                        break
+                
+                # If no job posting link found, look for relative links starting with /stellenangebote
+                if not job_link:
+                    for link_elem in all_links:
+                        href = link_elem.get('href', '')
+                        # Skip company profile links and external links
+                        if '/cmp/' in href or href.startswith('http'):
+                            continue
+                        # Look for job posting links that start with /stellenangebote
+                        if href.startswith('/stellenangebote') and 'inline.html' in href:
+                            job_link = link_elem
+                            job_title = link_elem.get_text(strip=True)
+                            break
+                
                 if not job_link:
                     continue
                 
-                # Extract job title from the link text or h2 element
-                title_elem = article.find('h2') or job_link
-                title = title_elem.get_text(strip=True) if title_elem else "Unknown Title"
+                # Extract job title from h2/h3 if available, otherwise use link text
+                if not job_title or len(job_title) < 5:
+                    title_elem = (article.find('h2') or
+                                 article.find('h3') or
+                                 article.find('span', attrs={'data-testid': re.compile('job-title')}))
+                    if title_elem:
+                        job_title = title_elem.get_text(strip=True)
+                
+                title = job_title if job_title and len(job_title) > 0 else "Unknown Title"
                 
                 link = job_link['href']
                 
@@ -69,17 +103,21 @@ class StepstoneJobScraper:
                 if not link.startswith("http"):
                     link = f"https://www.stepstone.de{link}"
                 
-                # Skip duplicates
-                if link in seen_links:
+                # Skip duplicates and company profile links
+                if link in seen_links or '/cmp/' in link:
                     continue
                 seen_links.add(link)
                 
                 # Extract company information
-                company_elem = article.find('span', class_=re.compile('res-1bl90s9|company')) or article.find('a', attrs={'data-testid': 'company-name'})
+                company_elem = (article.find('span', class_=re.compile('company|employer')) or
+                               article.find('a', attrs={'data-testid': re.compile('company|employer')}) or
+                               article.find('span', attrs={'data-testid': re.compile('company|employer')}))
                 company = company_elem.get_text(strip=True) if company_elem else "Unknown Company"
                 
                 # Extract short description
-                desc_elem = article.find('p', class_=re.compile('description|snippet')) or article.find('div', class_=re.compile('description|snippet'))
+                desc_elem = (article.find('p', class_=re.compile('description|snippet|teaser')) or
+                             article.find('div', class_=re.compile('description|snippet|teaser')) or
+                             article.find('span', class_=re.compile('description|snippet|teaser')))
                 description = desc_elem.get_text(strip=True)[:200] + "..." if desc_elem and desc_elem.get_text(strip=True) else "No description available"
                 
                 jobs.append({
