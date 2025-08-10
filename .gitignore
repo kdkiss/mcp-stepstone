@@ -1,5 +1,5 @@
 .smithery
 node_modules
 .env
-__pycache__
+D:\mcp-server\mcp-stepstone\__pycache__
 test_followup_workflow.py
