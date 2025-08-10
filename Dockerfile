@@ -8,7 +8,7 @@ WORKDIR /app
 COPY . /app
 
 # install dependencies
-RUN pip install --no-cache-dir requests beautifulsoup4 mcp
+RUN pip install --no-cache-dir requests beautifulsoup4 mcp lxml
 
 # expose nothing (stdio)
 

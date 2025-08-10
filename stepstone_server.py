@@ -28,6 +28,11 @@ from mcp.types import (
 )
 import mcp.types as types
 
+# Import new modules
+from job_details_models import JobDetails, SearchSession
+from job_detail_parser import JobDetailParser
+from session_manager import session_manager
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("stepstone-server")
@@ -55,13 +60,47 @@ class StepstoneJobScraper:
             seen_links = set()
             
             for article in container.find_all('article', attrs={'data-testid': 'job-item'}):
-                job_link = article.find('a')
+                # Find all links in the article
+                all_links = article.find_all('a', href=True)
+                
+                job_link = None
+                job_title = None
+                
+                # First, look for job posting links with the correct pattern
+                for link_elem in all_links:
+                    href = link_elem.get('href', '')
+                    
+                    # Check for actual job posting URLs (contain stellenangebote and inline.html)
+                    if re.search(r'/stellenangebote--.*--\d+-inline\.html', href):
+                        job_link = link_elem
+                        job_title = link_elem.get_text(strip=True)
+                        break
+                
+                # If no job posting link found, look for relative links starting with /stellenangebote
+                if not job_link:
+                    for link_elem in all_links:
+                        href = link_elem.get('href', '')
+                        # Skip company profile links and external links
+                        if '/cmp/' in href or href.startswith('http'):
+                            continue
+                        # Look for job posting links that start with /stellenangebote
+                        if href.startswith('/stellenangebote') and 'inline.html' in href:
+                            job_link = link_elem
+                            job_title = link_elem.get_text(strip=True)
+                            break
+                
                 if not job_link:
                     continue
                 
-                # Extract job title from the link text or h2 element
-                title_elem = article.find('h2') or job_link
-                title = title_elem.get_text(strip=True) if title_elem else "Unknown Title"
+                # Extract job title from h2/h3 if available, otherwise use link text
+                if not job_title or len(job_title) < 5:
+                    title_elem = (article.find('h2') or
+                                 article.find('h3') or
+                                 article.find('span', attrs={'data-testid': re.compile('job-title')}))
+                    if title_elem:
+                        job_title = title_elem.get_text(strip=True)
+                
+                title = job_title if job_title and len(job_title) > 0 else "Unknown Title"
                 
                 link = job_link['href']
                 
@@ -69,17 +108,21 @@ class StepstoneJobScraper:
                 if not link.startswith("http"):
                     link = f"https://www.stepstone.de{link}"
                 
-                # Skip duplicates
-                if link in seen_links:
+                # Skip duplicates and company profile links
+                if link in seen_links or '/cmp/' in link:
                     continue
                 seen_links.add(link)
                 
                 # Extract company information
-                company_elem = article.find('span', class_=re.compile('res-1bl90s9|company')) or article.find('a', attrs={'data-testid': 'company-name'})
+                company_elem = (article.find('span', class_=re.compile('company|employer')) or
+                               article.find('a', attrs={'data-testid': re.compile('company|employer')}) or
+                               article.find('span', attrs={'data-testid': re.compile('company|employer')}))
                 company = company_elem.get_text(strip=True) if company_elem else "Unknown Company"
                 
                 # Extract short description
-                desc_elem = article.find('p', class_=re.compile('description|snippet')) or article.find('div', class_=re.compile('description|snippet'))
+                desc_elem = (article.find('p', class_=re.compile('description|snippet|teaser')) or
+                             article.find('div', class_=re.compile('description|snippet|teaser')) or
+                             article.find('span', class_=re.compile('description|snippet|teaser')))
                 description = desc_elem.get_text(strip=True)[:200] + "..." if desc_elem and desc_elem.get_text(strip=True) else "No description available"
                 
                 jobs.append({
@@ -185,6 +228,28 @@ async def handle_list_tools() -> list[Tool]:
                 },
                 "required": []
             },
+        ),
+        Tool(
+            name="get_job_details",
+            description="Get detailed information about a specific job from previous search results",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session ID from previous search (optional, will use latest if not provided)"
+                    },
+                    "job_query": {
+                        "type": "string",
+                        "description": "Job title or description to search for in previous results"
+                    },
+                    "job_index": {
+                        "type": "integer",
+                        "description": "Index of the job in previous results (1-based, optional)"
+                    }
+                },
+                "required": ["job_query"]
+            },
         )
     ]
 
@@ -223,6 +288,13 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             logger.info(f"Searching jobs with terms: {search_terms}, zip: {zip_code}, radius: {radius}")
             results = scraper.search_jobs(search_terms, zip_code, radius)
             
+            # Create session for search results
+            all_jobs = []
+            for term, jobs in results.items():
+                all_jobs.extend(jobs)
+            
+            session = session_manager.create_session(all_jobs, search_terms, zip_code, radius)
+            
             # Format results for display
             formatted_output = []
             total_jobs = 0
@@ -245,6 +317,8 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             summary += f"Search Terms: {', '.join(search_terms)}\n"
             summary += f"Location: {zip_code} (±{radius}km)\n"
             summary += f"Total Jobs Found: {total_jobs}\n"
+            summary += f"Session ID: {session}\n"
+            summary += f"\n💡 Tip: Use 'get_job_details' tool with job_query='{all_jobs[0]['title']}' to get more details about any job!"
             
             full_response = summary + "\n".join(formatted_output)
             
@@ -258,6 +332,127 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             return [types.TextContent(
                 type="text",
                 text=f"Error performing job search: {str(e)}"
+            )]
+    elif name == "get_job_details":
+        # Extract parameters
+        job_query = arguments.get("job_query")
+        session_id = arguments.get("session_id")
+        job_index = arguments.get("job_index")
+        
+        # Validate parameters
+        if not job_query or not isinstance(job_query, str):
+            return [types.TextContent(
+                type="text",
+                text="Error: job_query must be a non-empty string"
+            )]
+        
+        try:
+            # Get job details
+            logger.info(f"Getting job details for query: {job_query}")
+            
+            # Find the job from previous search results
+            if session_id:
+                job = session_manager.find_job_in_session(session_id, job_query)
+            else:
+                # Use the most recent session if no session_id provided
+                recent_session = session_manager.get_recent_session()
+                if not recent_session:
+                    return [types.TextContent(
+                        type="text",
+                        text="No active search session found. Please perform a job search first."
+                    )]
+                job = session_manager.find_job_in_session(recent_session.session_id, job_query)
+            
+            if not job:
+                return [types.TextContent(
+                    type="text",
+                    text=f"No job found matching: {job_query}"
+                )]
+            
+            # Parse job details
+            parser = JobDetailParser()
+            details = parser.parse_job_details(job['link'])
+            
+            if not details:
+                return [types.TextContent(
+                    type="text",
+                    text=f"Could not retrieve details for job: {job['title']}"
+                )]
+            
+            # Format detailed response
+            formatted_output = []
+            formatted_output.append(f"📋 Job Details: {str(details.title or 'Unknown Title')}")
+            formatted_output.append(f"🏢 Company: {str(details.company or 'Unknown Company')}")
+            
+            if details.location:
+                formatted_output.append(f"📍 Location: {str(details.location)}")
+            
+            if details.salary:
+                formatted_output.append(f"💰 Salary: {str(details.salary)}")
+            
+            if details.employment_type:
+                formatted_output.append(f"⏰ Employment Type: {str(details.employment_type)}")
+            
+            if details.posted_date:
+                formatted_output.append(f"📅 Posted: {str(details.posted_date)}")
+            
+            formatted_output.append("")
+            formatted_output.append("📝 Description:")
+            # Ensure description is a string
+            description_str = str(details.description) if details.description else "No description available"
+            formatted_output.append(description_str)
+            
+            if details.requirements:
+                formatted_output.append("")
+                formatted_output.append("✅ Requirements:")
+                for req in details.requirements:
+                    # Ensure each requirement is a string
+                    if isinstance(req, dict):
+                        req_str = json.dumps(req, ensure_ascii=False)
+                    elif isinstance(req, list):
+                        req_str = ', '.join(str(item) for item in req)
+                    else:
+                        req_str = str(req) if req is not None else ""
+                    formatted_output.append(f"  • {req_str}")
+            
+            if details.benefits:
+                formatted_output.append("")
+                formatted_output.append("🎁 Benefits:")
+                for benefit in details.benefits:
+                    # Ensure each benefit is a string
+                    if isinstance(benefit, dict):
+                        benefit_str = json.dumps(benefit, ensure_ascii=False)
+                    elif isinstance(benefit, list):
+                        benefit_str = ', '.join(str(item) for item in benefit)
+                    else:
+                        benefit_str = str(benefit) if benefit is not None else ""
+                    formatted_output.append(f"  • {benefit_str}")
+            
+            if details.contact_info:
+                formatted_output.append("")
+                formatted_output.append("📞 Contact:")
+                if isinstance(details.contact_info, dict):
+                    contact_str = json.dumps(details.contact_info, ensure_ascii=False)
+                elif isinstance(details.contact_info, list):
+                    contact_str = ', '.join(str(item) for item in details.contact_info)
+                else:
+                    contact_str = str(details.contact_info) if details.contact_info else "No contact information available"
+                formatted_output.append(contact_str)
+            
+            formatted_output.append("")
+            apply_url = str(details.job_url or job['link'])
+            formatted_output.append(f"🔗 Apply: {apply_url}")
+            
+            return [types.TextContent(
+                type="text",
+                text="\n".join(formatted_output)
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error in get_job_details: {e}")
+            return [types.TextContent(
+                type="text",
+                text=f"Error retrieving job details: {str(e)}"
             )]
     else:
         raise ValueError(f"Unknown tool: {name}")
