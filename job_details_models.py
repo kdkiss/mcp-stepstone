@@ -57,10 +57,15 @@ class SearchSession:
     radius: int
     results: List[Dict[str, str]]
     timestamp: datetime
-    
+
     def is_expired(self, timeout_seconds: int = 3600) -> bool:
         """Check if session has expired"""
         return (datetime.now() - self.timestamp).total_seconds() > timeout_seconds
+
+    def __post_init__(self):
+        # Ensure search_terms is always a list to simplify downstream usage
+        if self.search_terms is None:
+            self.search_terms = []
 
 class JobDetailsError(Exception):
     """Base exception for job details retrieval"""

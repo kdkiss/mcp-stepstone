@@ -38,7 +38,7 @@ class SessionManager:
         
         session = SearchSession(
             session_id=session_id,
-            search_terms=search_terms,
+            search_terms=search_terms if search_terms is not None else [],
             zip_code=zip_code,
             radius=radius,
             results=results,
@@ -147,7 +147,8 @@ class SessionManager:
             return None
         
         summary = f"Search Session: {session_id[:8]}...\n"
-        summary += f"Search Terms: {', '.join(session.search_terms)}\n"
+        search_terms_text = ', '.join(session.search_terms) if session.search_terms else "None"
+        summary += f"Search Terms: {search_terms_text}\n"
         summary += f"Location: {session.zip_code} (±{session.radius}km)\n"
         summary += f"Results: {len(session.results)} jobs found\n"
         summary += f"Search Time: {session.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
