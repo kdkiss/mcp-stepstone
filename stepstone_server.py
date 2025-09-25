@@ -9,6 +9,7 @@ Compatible with Smithery and other MCP clients.
 import asyncio
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 import requests
 from bs4 import BeautifulSoup
@@ -147,17 +148,34 @@ class StepstoneJobScraper:
         encoded_term = quote(term)
         return f"https://www.stepstone.de/jobs/{encoded_term}/in-{zip_code}?radius={radius}&searchOrigin=Homepage_top-search&q=%22{encoded_term}%22"
     
+    def _search_single_term(self, term: str, zip_code: str, radius: int) -> tuple[str, List[Dict[str, str]]]:
+        """Helper for concurrently searching a single term."""
+        logger.info(f"Searching for jobs with term: {term}")
+        url = self.build_search_url(term, zip_code, radius)
+        jobs = self.fetch_job_listings(url)
+        return term, jobs
+
     def search_jobs(self, search_terms: List[str], zip_code: str = "40210", radius: int = 5) -> Dict[str, List[Dict[str, str]]]:
         """Search for jobs using multiple terms"""
-        results = {}
-        
-        for term in search_terms:
-            logger.info(f"Searching for jobs with term: {term}")
-            url = self.build_search_url(term, zip_code, radius)
-            jobs = self.fetch_job_listings(url)
-            results[term] = jobs
-        
-        return results
+        results: Dict[str, List[Dict[str, str]]] = {}
+
+        if not search_terms:
+            return results
+
+        max_workers = min(8, len(search_terms))
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(self._search_single_term, term, zip_code, radius)
+                for term in search_terms
+            ]
+
+            for future in as_completed(futures):
+                term, jobs = future.result()
+                results[term] = jobs
+
+        ordered_results = {term: results.get(term, []) for term in search_terms}
+        return ordered_results
 
 # Initialize the server
 server = Server("stepstone-job-search")
