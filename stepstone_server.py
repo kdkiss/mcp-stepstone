@@ -302,9 +302,14 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             )]
         
         try:
-            # Perform the job search
+            # Perform the job search without blocking the event loop
             logger.info(f"Searching jobs with terms: {search_terms}, zip: {zip_code}, radius: {radius}")
-            results = scraper.search_jobs(search_terms, zip_code, radius)
+            results = await asyncio.to_thread(
+                scraper.search_jobs,
+                search_terms,
+                zip_code,
+                radius,
+            )
             
             # Create session for search results
             all_jobs = []
@@ -389,7 +394,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             
             # Parse job details
             parser = JobDetailParser()
-            details = parser.parse_job_details(job['link'])
+            details = await asyncio.to_thread(parser.parse_job_details, job['link'])
             
             if not details:
                 return [types.TextContent(
