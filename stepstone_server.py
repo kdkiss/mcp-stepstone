@@ -255,18 +255,19 @@ async def handle_list_tools() -> list[Tool]:
                 "properties": {
                     "session_id": {
                         "type": "string",
-                        "description": "Session ID from previous search (optional, will use latest if not provided)"
+                        "description": "Session ID from a previous search (optional; latest active session will be used if omitted)"
                     },
-                    "job_query": {
+                    "query": {
                         "type": "string",
-                        "description": "Job title or description to search for in previous results"
+                        "description": "Job title or company name to search for in previous results"
                     },
                     "job_index": {
                         "type": "integer",
-                        "description": "Index of the job in previous results (1-based, optional)"
+                        "description": "Index of the job in previous results (1-based, optional)",
+                        "minimum": 1
                     }
                 },
-                "required": ["job_query"]
+                "required": []
             },
         )
     ]
@@ -341,7 +342,14 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             summary += f"Location: {zip_code} (±{radius}km)\n"
             summary += f"Total Jobs Found: {total_jobs}\n"
             summary += f"Session ID: {session}\n"
-            summary += f"\n💡 Tip: Use 'get_job_details' tool with job_query='{all_jobs[0]['title']}' to get more details about any job!"
+            if all_jobs:
+                tip_example = all_jobs[0]["title"]
+            else:
+                tip_example = "your saved job title"
+            summary += (
+                "\n💡 Tip: Use 'get_job_details' tool with "
+                f"query=\"{tip_example}\" to get more details about any job!"
+            )
             
             full_response = summary + "\n".join(formatted_output)
             
@@ -358,40 +366,74 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             )]
     elif name == "get_job_details":
         # Extract parameters
-        job_query = arguments.get("job_query")
+        query = arguments.get("query")
         session_id = arguments.get("session_id")
         job_index = arguments.get("job_index")
-        
+
         # Validate parameters
-        if not job_query or not isinstance(job_query, str):
+        if job_index is not None:
+            if not isinstance(job_index, int) or job_index < 1:
+                return [types.TextContent(
+                    type="text",
+                    text="Error: job_index must be an integer greater than or equal to 1"
+                )]
+
+        if not query and job_index is None:
             return [types.TextContent(
                 type="text",
-                text="Error: job_query must be a non-empty string"
+                text="Error: provide either a query string or a job_index to identify the job"
             )]
-        
+
         try:
             # Get job details
-            logger.info(f"Getting job details for query: {job_query}")
-            
-            # Find the job from previous search results
+            logger.info(
+                "Getting job details with parameters: query=%s, session_id=%s, job_index=%s",
+                query,
+                session_id,
+                job_index,
+            )
+
+            # Resolve the target session
             if session_id:
-                job = session_manager.find_job_in_session(session_id, job_query)
+                resolved_session = session_manager.get_session(session_id)
+                if not resolved_session:
+                    return [types.TextContent(
+                        type="text",
+                        text=(
+                            "Session not found or expired. Please provide an active session_id or run a new job search."
+                        )
+                    )]
             else:
-                # Use the most recent session if no session_id provided
-                recent_session = session_manager.get_recent_session()
-                if not recent_session:
+                resolved_session = session_manager.get_recent_session()
+                if not resolved_session:
                     return [types.TextContent(
                         type="text",
                         text="No active search session found. Please perform a job search first."
                     )]
-                job = session_manager.find_job_in_session(recent_session.session_id, job_query)
-            
-            if not job:
-                return [types.TextContent(
-                    type="text",
-                    text=f"No job found matching: {job_query}"
-                )]
-            
+
+            job = None
+
+            if job_index is not None:
+                job = session_manager.get_job_by_index(resolved_session.session_id, job_index)
+                if not job:
+                    total_jobs = len(resolved_session.results)
+                    if total_jobs:
+                        hint = f"Valid job_index values are between 1 and {total_jobs}."
+                    else:
+                        hint = "There are no stored jobs for this session yet. Run a job search first."
+                    return [types.TextContent(
+                        type="text",
+                        text="No job found at the requested index. " + hint
+                    )]
+
+            if job is None and query:
+                job = session_manager.find_job_in_session(resolved_session.session_id, query)
+                if not job:
+                    return [types.TextContent(
+                        type="text",
+                        text=f"No job found matching: {query}"
+                    )]
+
             # Parse job details
             parser = JobDetailParser()
             details = await asyncio.to_thread(parser.parse_job_details, job['link'])
