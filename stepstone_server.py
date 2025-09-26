@@ -341,9 +341,13 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             summary += f"Location: {zip_code} (±{radius}km)\n"
             summary += f"Total Jobs Found: {total_jobs}\n"
             summary += f"Session ID: {session}\n"
-            summary += f"\n💡 Tip: Use 'get_job_details' tool with job_query='{all_jobs[0]['title']}' to get more details about any job!"
-            
-            full_response = summary + "\n".join(formatted_output)
+
+            if all_jobs:
+                tip = f"\n💡 Tip: Use 'get_job_details' tool with job_query='{all_jobs[0]['title']}' to get more details about any job!"
+            else:
+                tip = "\n💡 Tip: Try adjusting your search terms or radius to discover more roles."
+
+            full_response = summary + tip + "\n".join(formatted_output)
             
             return [types.TextContent(
                 type="text",
