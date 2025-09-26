@@ -37,3 +37,4 @@ async def test_search_jobs_no_results(monkeypatch, caplog):
     assert "refining your search terms" in message
 
     assert any("returned no results" in record.getMessage() for record in caplog.records)
+
