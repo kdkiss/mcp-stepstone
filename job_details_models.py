@@ -3,7 +3,7 @@
 Data models for detailed job information in the Stepstone MCP server
 """
 
-from typing import List, Dict, Optional
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime
 import uuid
@@ -28,7 +28,7 @@ class JobDetails:
     job_url: str
     raw_html: Optional[str] = None  # For debugging
 
-    def to_dict(self) -> Dict[str, any]:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
             "title": self.title,

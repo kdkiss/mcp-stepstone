@@ -114,3 +114,4 @@ def test_get_job_details_index_takes_precedence_over_query():
     body = response[0].text
     assert "📋 Job Details: Compliance Specialist" in body
     assert "Non-matching query" not in body
+

@@ -352,8 +352,17 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             summary += f"Location: {zip_code} (±{radius}km)\n"
             summary += f"Total Jobs Found: {total_jobs}\n"
             summary += f"Session ID: {session}\n"
-            summary += f"\n💡 Tip: Use 'get_job_details' tool with job_query='{all_jobs[0]['title']}' to get more details about any job!"
-            
+
+            if all_jobs:
+                summary += (
+                    f"\n💡 Tip: Use 'get_job_details' tool with job_query='{all_jobs[0]['title']}' to get more details about any job!\n"
+                )
+            else:
+                summary += (
+                    "\nNo jobs were found for the provided search terms.\n"
+                    "💡 Tip: Try adjusting your search terms or radius to discover more listings.\n"
+                )
+
             full_response = summary + "\n".join(formatted_output)
             
             return [types.TextContent(
@@ -452,6 +461,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                     target_session.session_id,
                     query,
                 )
+
 
             if not job:
                 return [types.TextContent(
