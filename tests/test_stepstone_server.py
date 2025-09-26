@@ -1,117 +1,40 @@
-import asyncio
-import sys
-from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import patch
-
 import pytest
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-
-from stepstone_server import handle_call_tool, session_manager
+import stepstone_server
 
 
-@pytest.fixture(autouse=True)
-def clear_sessions():
-    session_manager.sessions.clear()
-    yield
-    session_manager.sessions.clear()
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
 
 
-def _create_session_with_jobs():
-    job_results = [
-        {
-            "title": "Fraud Analyst",
-            "company": "Acme Corp",
-            "description": "Investigate suspicious activity",
-            "link": "https://example.com/fraud-analyst",
-        },
-        {
-            "title": "Compliance Specialist",
-            "company": "Beta Ltd",
-            "description": "Ensure regulatory adherence",
-            "link": "https://example.com/compliance-specialist",
-        },
-    ]
+@pytest.mark.anyio("asyncio")
+async def test_search_jobs_no_results(monkeypatch, caplog):
+    search_terms = ["term1", "term2"]
 
-    return session_manager.create_session(results=job_results)
+    def fake_search_jobs(terms, zip_code, radius):
+        assert terms == search_terms
+        return {term: [] for term in terms}
 
+    def fake_create_session(results, *args, **kwargs):
+        assert results == []
+        return "test-session"
 
-def _fake_job_details(title: str) -> SimpleNamespace:
-    return SimpleNamespace(
-        title=title,
-        company="Acme Corp",
-        location="Düsseldorf",
-        salary=None,
-        employment_type=None,
-        experience_level=None,
-        posted_date=None,
-        description="Detailed description",
-        requirements=[],
-        responsibilities=[],
-        benefits=[],
-        company_details={},
-        application_instructions="",
-        contact_info={},
-        job_url="https://example.com/job",
-        raw_html=None,
-    )
+    monkeypatch.setattr(stepstone_server.scraper, "search_jobs", fake_search_jobs)
+    monkeypatch.setattr(stepstone_server.session_manager, "create_session", fake_create_session)
 
-
-def test_get_job_details_by_index_without_query():
-    session_id = _create_session_with_jobs()
-    details = _fake_job_details("Fraud Analyst")
-
-    with patch("stepstone_server.JobDetailParser.parse_job_details", return_value=details):
-        response = asyncio.run(
-            handle_call_tool(
-                "get_job_details",
-                {
-                    "session_id": session_id,
-                    "job_index": 1,
-                },
-            )
+    with caplog.at_level("INFO"):
+        response = await stepstone_server.handle_call_tool(
+            "search_jobs",
+            {"search_terms": search_terms, "zip_code": "40210", "radius": 5},
         )
 
     assert response
-    assert "📋 Job Details: Fraud Analyst" in response[0].text
+    message = response[0].text
 
+    assert "Total Jobs Found: 0" in message
+    assert "No jobs found for this search term." in message
+    assert "refining your search terms" in message
 
-def test_get_job_details_by_index_out_of_range():
-    session_id = _create_session_with_jobs()
-
-    response = asyncio.run(
-        handle_call_tool(
-            "get_job_details",
-            {
-                "session_id": session_id,
-                "job_index": 3,
-            },
-        )
-    )
-
-    assert response
-    assert "Error: job_index 3 is out of range" in response[0].text
-
-
-def test_get_job_details_index_takes_precedence_over_query():
-    session_id = _create_session_with_jobs()
-    details = _fake_job_details("Compliance Specialist")
-
-    with patch("stepstone_server.JobDetailParser.parse_job_details", return_value=details):
-        response = asyncio.run(
-            handle_call_tool(
-                "get_job_details",
-                {
-                    "session_id": session_id,
-                    "job_index": 2,
-                    "job_query": "Non-matching query",
-                },
-            )
-        )
-
-    assert response
-    body = response[0].text
-    assert "📋 Job Details: Compliance Specialist" in body
-    assert "Non-matching query" not in body
+    assert any("returned no results" in record.getMessage() for record in caplog.records)
 

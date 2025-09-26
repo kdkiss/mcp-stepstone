@@ -326,17 +326,25 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             all_jobs = []
             for term, jobs in results.items():
                 all_jobs.extend(jobs)
-            
+
+            if not all_jobs:
+                logger.info(
+                    "Job search returned no results for terms=%s zip=%s radius=%s",
+                    search_terms,
+                    zip_code,
+                    radius,
+                )
+
             session = session_manager.create_session(all_jobs, search_terms, zip_code, radius)
-            
+
             # Format results for display
             formatted_output = []
             total_jobs = 0
-            
+
             for term, jobs in results.items():
                 total_jobs += len(jobs)
                 formatted_output.append(f"\n--- Results for '{term}' ---")
-                
+
                 if not jobs:
                     formatted_output.append("No jobs found for this search term.")
                 else:
@@ -345,7 +353,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                         formatted_output.append(f"   Company: {job['company']}")
                         formatted_output.append(f"   Description: {job['description']}")
                         formatted_output.append(f"   Link: {job['link']}")
-            
+
             # Add summary
             summary = f"Job Search Summary:\n"
             summary += f"Search Terms: {', '.join(search_terms)}\n"
@@ -355,13 +363,12 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
 
             if all_jobs:
                 summary += (
-                    f"\n💡 Tip: Use 'get_job_details' tool with job_query='{all_jobs[0]['title']}' to get more details about any job!\n"
+                    f"\n💡 Tip: Use 'get_job_details' tool with job_query='{all_jobs[0]['title']}' "
+                    "to get more details about any job!"
                 )
             else:
-                summary += (
-                    "\nNo jobs were found for the provided search terms.\n"
-                    "💡 Tip: Try adjusting your search terms or radius to discover more listings.\n"
-                )
+                summary += "\n💡 Tip: Try refining your search terms or expanding the radius to discover more roles."
+            
 
             full_response = summary + "\n".join(formatted_output)
             
