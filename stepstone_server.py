@@ -203,14 +203,22 @@ This server allows you to search for jobs on Stepstone.de.
 
 Available tools:
 - search_jobs: Search for jobs using multiple search terms
+- get_job_details: Retrieve a single job from your most recent or specified search session
 
 Parameters:
 - search_terms: List of job search terms (e.g., ["fraud", "betrug", "data analyst"])
 - zip_code: German postal code for location-based search (default: "40210")
 - radius: Search radius in kilometers (default: 5)
+- job_index: 1-based index into the stored results of a previous search session. Takes precedence over job_query when provided.
+- job_query: Text used to fuzzy-match a job when job_index is not supplied.
+
+Validation messages:
+- "Error: job_index must be a positive integer" appears when non-positive numbers are supplied.
+- "Error: job_index X is out of range" appears when the selected index is not present in the stored results.
+- "Error: Provide either job_index or job_query" appears when neither selector is supplied.
 
 Example usage:
-Use the search_jobs tool with terms like "fraud specialist", "betrug", "compliance" to find relevant positions.
+Use the search_jobs tool with terms like "fraud specialist", "betrug", "compliance" to find relevant positions, then call get_job_details with job_index=1 to fetch the first stored job.
 """
     else:
         raise ValueError(f"Unknown resource: {uri}")
@@ -249,7 +257,10 @@ async def handle_list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_job_details",
-            description="Get detailed information about a specific job from previous search results",
+            description=(
+                "Get detailed information about a specific job from stored search results. "
+                "Provide job_index (1-based) to select by position or job_query to fuzzy match when no index is supplied."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -259,14 +270,14 @@ async def handle_list_tools() -> list[Tool]:
                     },
                     "job_query": {
                         "type": "string",
-                        "description": "Job title or description to search for in previous results"
+                        "description": "Job title or description to search for when job_index is omitted"
                     },
                     "job_index": {
                         "type": "integer",
-                        "description": "Index of the job in previous results (1-based, optional)"
+                        "description": "1-based index of the job in previous results. Takes precedence over job_query when provided."
                     }
                 },
-                "required": ["job_query"]
+                "required": []
             },
         )
     ]
@@ -360,38 +371,97 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
         # Extract parameters
         job_query = arguments.get("job_query")
         session_id = arguments.get("session_id")
-        job_index = arguments.get("job_index")
-        
-        # Validate parameters
-        if not job_query or not isinstance(job_query, str):
-            return [types.TextContent(
-                type="text",
-                text="Error: job_query must be a non-empty string"
-            )]
-        
+        job_index_raw = arguments.get("job_index")
+
+        # Normalize and validate job_index if provided
+        job_index: Optional[int] = None
+        if job_index_raw is not None:
+            try:
+                job_index = int(job_index_raw)
+            except (TypeError, ValueError):
+                return [types.TextContent(
+                    type="text",
+                    text="Error: job_index must be a positive integer"
+                )]
+
+            if job_index < 1:
+                return [types.TextContent(
+                    type="text",
+                    text="Error: job_index must be a positive integer"
+                )]
+
+        # Validate fallback when no job_index present
+        if job_index is None:
+            if not job_query or not isinstance(job_query, str) or not job_query.strip():
+                return [types.TextContent(
+                    type="text",
+                    text="Error: Provide either job_index or job_query to identify the job"
+                )]
+
+        target_session: Optional[SearchSession]
+        if session_id:
+            target_session = session_manager.get_session(session_id)
+            if not target_session:
+                return [types.TextContent(
+                    type="text",
+                    text="No active search session found for the provided session_id. Please perform a job search first."
+                )]
+        else:
+            target_session = session_manager.get_recent_session()
+            if not target_session:
+                return [types.TextContent(
+                    type="text",
+                    text="No active search session found. Please perform a job search first."
+                )]
+
         try:
             # Get job details
-            logger.info(f"Getting job details for query: {job_query}")
-            
-            # Find the job from previous search results
-            if session_id:
-                job = session_manager.find_job_in_session(session_id, job_query)
-            else:
-                # Use the most recent session if no session_id provided
-                recent_session = session_manager.get_recent_session()
-                if not recent_session:
+            job: Optional[Dict[str, str]] = None
+            if job_index is not None:
+                logger.info(
+                    "Getting job details for index %s in session %s",
+                    job_index,
+                    target_session.session_id,
+                )
+                jobs = target_session.results or []
+                if not jobs:
                     return [types.TextContent(
                         type="text",
-                        text="No active search session found. Please perform a job search first."
+                        text="No jobs available in the selected session. Please perform a new search."
                     )]
-                job = session_manager.find_job_in_session(recent_session.session_id, job_query)
-            
+
+                zero_based_index = job_index - 1
+                if zero_based_index < 0 or zero_based_index >= len(jobs):
+                    return [types.TextContent(
+                        type="text",
+                        text=(
+                            f"Error: job_index {job_index} is out of range. "
+                            f"Select a value between 1 and {len(jobs)}."
+                        )
+                    )]
+
+                job = jobs[zero_based_index]
+            else:
+                query = job_query.strip() if isinstance(job_query, str) else ""
+                logger.info(
+                    "Getting job details for query '%s' in session %s",
+                    query,
+                    target_session.session_id,
+                )
+                job = session_manager.find_job_in_session(
+                    target_session.session_id,
+                    query,
+                )
+
             if not job:
                 return [types.TextContent(
                     type="text",
-                    text=f"No job found matching: {job_query}"
+                    text=(
+                        f"No job found matching: {job_query}" if job_index is None else
+                        f"No job found at index {job_index}."
+                    )
                 )]
-            
+
             # Parse job details
             parser = JobDetailParser()
             details = await asyncio.to_thread(parser.parse_job_details, job['link'])
