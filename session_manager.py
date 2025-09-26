@@ -135,6 +135,19 @@ class SessionManager:
                 return job
         
         return None
+
+    def get_job_by_index(self, session_id: str, job_index: int) -> Optional[Dict[str, str]]:
+        """Retrieve a job by its 1-based index within a session."""
+        session = self.get_session(session_id)
+        if not session:
+            return None
+
+        # Convert to zero-based index for list access
+        zero_based_index = job_index - 1
+        if zero_based_index < 0 or zero_based_index >= len(session.results):
+            return None
+
+        return session.results[zero_based_index]
     
     def get_recent_session(self) -> Optional[SearchSession]:
         """

@@ -266,15 +266,17 @@ async def handle_list_tools() -> list[Tool]:
                 "properties": {
                     "session_id": {
                         "type": "string",
-                        "description": "Session ID from previous search (optional, will use latest if not provided)"
+                        "description": "Session ID from a previous search (optional; latest active session will be used if omitted)"
                     },
-                    "job_query": {
+                    "query": {
                         "type": "string",
-                        "description": "Job title or description to search for when job_index is omitted"
+                        "description": "Job title or company name to search for in previous results"
                     },
                     "job_index": {
                         "type": "integer",
-                        "description": "1-based index of the job in previous results. Takes precedence over job_query when provided."
+                        "description": "Index of the job in previous results (1-based, optional)",
+                        "minimum": 1
+
                     }
                 },
                 "required": []
@@ -360,13 +362,16 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             summary += f"Location: {zip_code} (±{radius}km)\n"
             summary += f"Total Jobs Found: {total_jobs}\n"
             summary += f"Session ID: {session}\n"
-
             if all_jobs:
-                tip = f"\n💡 Tip: Use 'get_job_details' tool with job_query='{all_jobs[0]['title']}' to get more details about any job!"
+                tip_example = all_jobs[0]["title"]
             else:
-                tip = "\n💡 Tip: Try adjusting your search terms or radius to discover more roles."
-
-            full_response = summary + tip + "\n".join(formatted_output)
+                tip_example = "your saved job title"
+            summary += (
+                "\n💡 Tip: Use 'get_job_details' tool with "
+                f"query=\"{tip_example}\" to get more details about any job!"
+            )
+            
+            full_response = summary + "\n".join(formatted_output)
 
             
             return [types.TextContent(
@@ -382,99 +387,75 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             )]
     elif name == "get_job_details":
         # Extract parameters
-        job_query = arguments.get("job_query")
+        query = arguments.get("query")
         session_id = arguments.get("session_id")
-        job_index_raw = arguments.get("job_index")
+        job_index = arguments.get("job_index")
 
-        # Normalize and validate job_index if provided
-        job_index: Optional[int] = None
-        if job_index_raw is not None:
-            try:
-                job_index = int(job_index_raw)
-            except (TypeError, ValueError):
+        # Validate parameters
+        if job_index is not None:
+            if not isinstance(job_index, int) or job_index < 1:
                 return [types.TextContent(
                     type="text",
-                    text="Error: job_index must be a positive integer"
+                    text="Error: job_index must be an integer greater than or equal to 1"
                 )]
 
-            if job_index < 1:
-                return [types.TextContent(
-                    type="text",
-                    text="Error: job_index must be a positive integer"
-                )]
-
-        # Validate fallback when no job_index present
-        if job_index is None:
-            if not job_query or not isinstance(job_query, str) or not job_query.strip():
-                return [types.TextContent(
-                    type="text",
-                    text="Error: Provide either job_index or job_query to identify the job"
-                )]
-
-        target_session: Optional[SearchSession]
-        if session_id:
-            target_session = session_manager.get_session(session_id)
-            if not target_session:
-                return [types.TextContent(
-                    type="text",
-                    text="No active search session found for the provided session_id. Please perform a job search first."
-                )]
-        else:
-            target_session = session_manager.get_recent_session()
-            if not target_session:
-                return [types.TextContent(
-                    type="text",
-                    text="No active search session found. Please perform a job search first."
-                )]
+        if not query and job_index is None:
+            return [types.TextContent(
+                type="text",
+                text="Error: provide either a query string or a job_index to identify the job"
+            )]
 
         try:
             # Get job details
-            job: Optional[Dict[str, str]] = None
-            if job_index is not None:
-                logger.info(
-                    "Getting job details for index %s in session %s",
-                    job_index,
-                    target_session.session_id,
-                )
-                jobs = target_session.results or []
-                if not jobs:
+            logger.info(
+                "Getting job details with parameters: query=%s, session_id=%s, job_index=%s",
+                query,
+                session_id,
+                job_index,
+            )
+
+            # Resolve the target session
+            if session_id:
+                resolved_session = session_manager.get_session(session_id)
+                if not resolved_session:
+                    return [types.TextContent(
+                        type="text",
+                        text=(
+                            "Session not found or expired. Please provide an active session_id or run a new job search."
+                        )
+                    )]
+            else:
+                resolved_session = session_manager.get_recent_session()
+                if not resolved_session:
+
                     return [types.TextContent(
                         type="text",
                         text="No jobs available in the selected session. Please perform a new search."
                     )]
 
-                zero_based_index = job_index - 1
-                if zero_based_index < 0 or zero_based_index >= len(jobs):
+            job = None
+
+            if job_index is not None:
+                job = session_manager.get_job_by_index(resolved_session.session_id, job_index)
+                if not job:
+                    total_jobs = len(resolved_session.results)
+                    if total_jobs:
+                        hint = f"Valid job_index values are between 1 and {total_jobs}."
+                    else:
+                        hint = "There are no stored jobs for this session yet. Run a job search first."
                     return [types.TextContent(
                         type="text",
-                        text=(
-                            f"Error: job_index {job_index} is out of range. "
-                            f"Select a value between 1 and {len(jobs)}."
-                        )
+                        text="No job found at the requested index. " + hint
                     )]
 
-                job = jobs[zero_based_index]
-            else:
-                query = job_query.strip() if isinstance(job_query, str) else ""
-                logger.info(
-                    "Getting job details for query '%s' in session %s",
-                    query,
-                    target_session.session_id,
-                )
-                job = session_manager.find_job_in_session(
-                    target_session.session_id,
-                    query,
-                )
+            if job is None and query:
+                job = session_manager.find_job_in_session(resolved_session.session_id, query)
+                if not job:
+                    return [types.TextContent(
+                        type="text",
+                        text=f"No job found matching: {query}"
+                    )]
 
-
-            if not job:
-                return [types.TextContent(
-                    type="text",
-                    text=(
-                        f"No job found matching: {job_query}" if job_index is None else
-                        f"No job found at index {job_index}."
-                    )
-                )]
 
             # Parse job details
             parser = JobDetailParser()

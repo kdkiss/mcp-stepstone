@@ -144,9 +144,14 @@ Search for job listings using multiple search terms with location-based filterin
 Get detailed information about a specific job from previous search results.
 
 **Parameters:**
-- `query` (string, required): Job title or company name to match against previous search results
+- `query` (string, optional): Job title or company name to match against previous search results.
+  - Provide either `query` or `job_index`.
   - Example: `"AML Specialist"` or `"Deutsche Bank AG"`
-- `session_id` (string, required): Session ID from previous search results
+- `job_index` (integer, optional): 1-based index of the job within stored search results.
+  - Provide either `job_index` or `query`.
+  - Example: `1` selects the first job in the saved results.
+- `session_id` (string, optional): Session ID from previous search results.
+  - Defaults to the latest active session when omitted.
   - Example: `"550e8400-e29b-41d4-a716-446655440000"`
 
 ### Example Usage
@@ -192,6 +197,16 @@ Get detailed information about a specific job from previous search results.
   "parameters": {
     "query": "AML Specialist",
     "session_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+```
+
+#### Follow-up Questions - Get Job Details by Index
+```json
+{
+  "tool": "get_job_details",
+  "parameters": {
+    "job_index": 1
   }
 }
 ```
