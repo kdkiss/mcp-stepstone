@@ -203,14 +203,22 @@ This server allows you to search for jobs on Stepstone.de.
 
 Available tools:
 - search_jobs: Search for jobs using multiple search terms
+- get_job_details: Retrieve a single job from your most recent or specified search session
 
 Parameters:
 - search_terms: List of job search terms (e.g., ["fraud", "betrug", "data analyst"])
 - zip_code: German postal code for location-based search (default: "40210")
 - radius: Search radius in kilometers (default: 5)
+- job_index: 1-based index into the stored results of a previous search session. Takes precedence over job_query when provided.
+- job_query: Text used to fuzzy-match a job when job_index is not supplied.
+
+Validation messages:
+- "Error: job_index must be a positive integer" appears when non-positive numbers are supplied.
+- "Error: job_index X is out of range" appears when the selected index is not present in the stored results.
+- "Error: Provide either job_index or job_query" appears when neither selector is supplied.
 
 Example usage:
-Use the search_jobs tool with terms like "fraud specialist", "betrug", "compliance" to find relevant positions.
+Use the search_jobs tool with terms like "fraud specialist", "betrug", "compliance" to find relevant positions, then call get_job_details with job_index=1 to fetch the first stored job.
 """
     else:
         raise ValueError(f"Unknown resource: {uri}")
@@ -249,7 +257,10 @@ async def handle_list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_job_details",
-            description="Get detailed information about a specific job from previous search results",
+            description=(
+                "Get detailed information about a specific job from stored search results. "
+                "Provide job_index (1-based) to select by position or job_query to fuzzy match when no index is supplied."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -265,6 +276,7 @@ async def handle_list_tools() -> list[Tool]:
                         "type": "integer",
                         "description": "Index of the job in previous results (1-based, optional)",
                         "minimum": 1
+
                     }
                 },
                 "required": []
@@ -316,17 +328,25 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             all_jobs = []
             for term, jobs in results.items():
                 all_jobs.extend(jobs)
-            
+
+            if not all_jobs:
+                logger.info(
+                    "Job search returned no results for terms=%s zip=%s radius=%s",
+                    search_terms,
+                    zip_code,
+                    radius,
+                )
+
             session = session_manager.create_session(all_jobs, search_terms, zip_code, radius)
-            
+
             # Format results for display
             formatted_output = []
             total_jobs = 0
-            
+
             for term, jobs in results.items():
                 total_jobs += len(jobs)
                 formatted_output.append(f"\n--- Results for '{term}' ---")
-                
+
                 if not jobs:
                     formatted_output.append("No jobs found for this search term.")
                 else:
@@ -335,7 +355,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                         formatted_output.append(f"   Company: {job['company']}")
                         formatted_output.append(f"   Description: {job['description']}")
                         formatted_output.append(f"   Link: {job['link']}")
-            
+
             # Add summary
             summary = f"Job Search Summary:\n"
             summary += f"Search Terms: {', '.join(search_terms)}\n"
@@ -352,6 +372,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             )
             
             full_response = summary + "\n".join(formatted_output)
+
             
             return [types.TextContent(
                 type="text",
@@ -406,9 +427,10 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             else:
                 resolved_session = session_manager.get_recent_session()
                 if not resolved_session:
+
                     return [types.TextContent(
                         type="text",
-                        text="No active search session found. Please perform a job search first."
+                        text="No jobs available in the selected session. Please perform a new search."
                     )]
 
             job = None
@@ -433,6 +455,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                         type="text",
                         text=f"No job found matching: {query}"
                     )]
+
 
             # Parse job details
             parser = JobDetailParser()

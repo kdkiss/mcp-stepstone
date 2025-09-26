@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""
-Session management for storing and retrieving search results
-"""
+"""Session management for storing and retrieving search results."""
 
+import logging
 import uuid
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 from job_details_models import SearchSession
+
+
+logger = logging.getLogger(__name__)
 
 class SessionManager:
     """Manages search sessions for follow-up questions"""
@@ -90,18 +92,45 @@ class SessionManager:
         
         # Try exact title match first
         for job in session.results:
-            if query_lower in job['title'].lower():
+            if not isinstance(job, dict):
+                logger.warning("Skipping non-dictionary job entry: %r", job)
+                continue
+
+            title = job.get("title")
+            if not isinstance(title, str):
+                logger.warning("Job missing valid title; skipping entry: %r", job)
+                continue
+
+            if query_lower in title.lower():
                 return job
-        
+
         # Try company match
         for job in session.results:
-            if query_lower in job['company'].lower():
+            if not isinstance(job, dict):
+                logger.warning("Skipping non-dictionary job entry: %r", job)
+                continue
+
+            company = job.get("company")
+            if not isinstance(company, str):
+                logger.warning("Job missing valid company; skipping entry: %r", job)
+                continue
+
+            if query_lower in company.lower():
                 return job
-        
+
         # Try partial title match
         query_words = query_lower.split()
         for job in session.results:
-            title_words = job['title'].lower().split()
+            if not isinstance(job, dict):
+                logger.warning("Skipping non-dictionary job entry: %r", job)
+                continue
+
+            title = job.get("title")
+            if not isinstance(title, str):
+                logger.warning("Job missing valid title; skipping entry: %r", job)
+                continue
+
+            title_words = title.lower().split()
             if any(word in title_words for word in query_words):
                 return job
         

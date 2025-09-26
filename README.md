@@ -58,6 +58,18 @@ docker build -t mcp-stepstone .
 docker run -it mcp-stepstone
 ```
 
+## 🧪 Testing
+
+The project includes unit tests for the scraper, job detail parser, and MCP tool flows. After installing the runtime dependencies,
+install `pytest` and run the test suite:
+
+```bash
+pip install -r requirements.txt pytest
+pytest
+```
+
+All tests run locally without external Stepstone traffic thanks to mocked HTML fixtures and patched network calls.
+
 ## 🔧 Configuration
 
 ### MCP Client Configuration
