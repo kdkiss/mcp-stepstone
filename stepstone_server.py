@@ -361,31 +361,58 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
         job_query = arguments.get("job_query")
         session_id = arguments.get("session_id")
         job_index = arguments.get("job_index")
-        
+
         # Validate parameters
         if not job_query or not isinstance(job_query, str):
             return [types.TextContent(
                 type="text",
                 text="Error: job_query must be a non-empty string"
             )]
-        
+
         try:
             # Get job details
             logger.info(f"Getting job details for query: {job_query}")
-            
-            # Find the job from previous search results
+
+            # Determine which session to use for lookup
+            session = None
             if session_id:
-                job = session_manager.find_job_in_session(session_id, job_query)
-            else:
-                # Use the most recent session if no session_id provided
-                recent_session = session_manager.get_recent_session()
-                if not recent_session:
+                session = session_manager.get_session(session_id)
+
+            if not session:
+                session = session_manager.get_recent_session()
+
+            if not session:
+                return [types.TextContent(
+                    type="text",
+                    text="No active search session found. Please perform a job search first."
+                )]
+
+            # Attempt to resolve the job by index if provided
+            job = None
+            if job_index is not None:
+                try:
+                    index_value = int(job_index)
+                except (TypeError, ValueError):
                     return [types.TextContent(
                         type="text",
-                        text="No active search session found. Please perform a job search first."
+                        text="Error: job_index must be an integer"
                     )]
-                job = session_manager.find_job_in_session(recent_session.session_id, job_query)
-            
+
+                total_jobs = len(session.results)
+                if index_value < 1 or index_value > total_jobs:
+                    return [types.TextContent(
+                        type="text",
+                        text=f"Error: job_index {index_value} is out of range. This session has {total_jobs} job(s)."
+                    )]
+
+                job_candidate = session.results[index_value - 1] if total_jobs else None
+                if job_candidate and isinstance(job_candidate, dict) and job_candidate.get("link"):
+                    job = job_candidate
+
+            # Fall back to query lookup if no valid indexed job found
+            if not job:
+                job = session_manager.find_job_in_session(session.session_id, job_query)
+
             if not job:
                 return [types.TextContent(
                     type="text",
