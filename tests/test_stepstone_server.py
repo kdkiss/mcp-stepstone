@@ -27,3 +27,4 @@ def test_search_jobs_handles_empty_results(monkeypatch):
     assert "Total Jobs Found: 0" in text
     assert "No jobs were found for the provided search terms." in text
     assert "job_query='" not in text
+
