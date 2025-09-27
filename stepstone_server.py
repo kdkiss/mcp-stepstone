@@ -348,7 +348,9 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 formatted_output.append(f"\n--- Results for '{term}' ---")
 
                 if not jobs:
-                    formatted_output.append("No jobs found for this search term.")
+                    formatted_output.append(
+                        "No jobs found for this search term. Try refining your search terms or expanding the radius."
+                    )
                 else:
                     for i, job in enumerate(jobs, 1):
                         formatted_output.append(f"\n{i}. {job['title']}")

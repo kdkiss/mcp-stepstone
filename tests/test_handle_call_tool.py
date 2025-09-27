@@ -53,7 +53,7 @@ def test_handle_call_tool_search_jobs_empty_results(monkeypatch):
     text = response[0].text
     assert "Total Jobs Found: 0" in text
     assert "No jobs found for this search term." in text
-    assert "Try adjusting your search terms" in text
+    assert "Try refining your search terms or expanding the radius." in text
 
 
 def test_handle_call_tool_search_jobs_error(monkeypatch):
@@ -98,7 +98,7 @@ def test_handle_call_tool_get_job_details_success(monkeypatch):
 
     response = asyncio.run(handle_call_tool(
         "get_job_details",
-        {"job_query": "Fraud Analyst", "session_id": session_id},
+        {"query": "Fraud Analyst", "session_id": session_id},
     ))
 
     text = response[0].text
@@ -123,7 +123,7 @@ def test_handle_call_tool_get_job_details_no_match(monkeypatch):
 
     response = asyncio.run(handle_call_tool(
         "get_job_details",
-        {"job_query": "Data Scientist", "session_id": list(session_manager.sessions.keys())[0]},
+        {"query": "Data Scientist", "session_id": list(session_manager.sessions.keys())[0]},
     ))
 
     assert response[0].text == "No job found matching: Data Scientist"
@@ -145,7 +145,7 @@ def test_handle_call_tool_get_job_details_error(monkeypatch):
 
     response = asyncio.run(handle_call_tool(
         "get_job_details",
-        {"job_query": "Fraud Analyst", "session_id": session_id},
+        {"query": "Fraud Analyst", "session_id": session_id},
     ))
 
     assert "Error retrieving job details: parse failure" in response[0].text
