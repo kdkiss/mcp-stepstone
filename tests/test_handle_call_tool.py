@@ -98,7 +98,7 @@ def test_handle_call_tool_get_job_details_success(monkeypatch):
 
     response = asyncio.run(handle_call_tool(
         "get_job_details",
-        {"job_query": "Fraud Analyst", "session_id": session_id},
+        {"query": "Fraud Analyst", "session_id": session_id},
     ))
 
     text = response[0].text
@@ -123,7 +123,7 @@ def test_handle_call_tool_get_job_details_no_match(monkeypatch):
 
     response = asyncio.run(handle_call_tool(
         "get_job_details",
-        {"job_query": "Data Scientist", "session_id": list(session_manager.sessions.keys())[0]},
+        {"query": "Data Scientist", "session_id": list(session_manager.sessions.keys())[0]},
     ))
 
     assert response[0].text == "No job found matching: Data Scientist"
@@ -145,7 +145,45 @@ def test_handle_call_tool_get_job_details_error(monkeypatch):
 
     response = asyncio.run(handle_call_tool(
         "get_job_details",
-        {"job_query": "Fraud Analyst", "session_id": session_id},
+        {"query": "Fraud Analyst", "session_id": session_id},
     ))
 
     assert "Error retrieving job details: parse failure" in response[0].text
+
+
+def test_handle_call_tool_get_job_details_legacy_alias(monkeypatch):
+    job = {
+        "title": "Fraud Analyst",
+        "company": "Secure Corp",
+        "description": "Investigate fraud cases",
+        "link": "https://example.com/job/1",
+    }
+    session_id = session_manager.create_session([job], ["fraud"], "40210", 5)
+
+    fake_details = JobDetails(
+        title="Fraud Analyst",
+        company="Secure Corp",
+        location="Berlin",
+        salary=None,
+        employment_type="Vollzeit",
+        experience_level=None,
+        posted_date=None,
+        description="Detailed description",
+        requirements=["Skill"],
+        responsibilities=["Task"],
+        benefits=["Benefit"],
+        company_details={},
+        application_instructions="Apply online",
+        contact_info={},
+        job_url="https://example.com/job/1",
+    )
+
+    monkeypatch.setattr(JobDetailParser, "parse_job_details", lambda self, url: fake_details)
+
+    response = asyncio.run(handle_call_tool(
+        "get_job_details",
+        {"job_query": "Fraud Analyst", "session_id": session_id},
+    ))
+
+    text = response[0].text
+    assert "📋 Job Details: Fraud Analyst" in text

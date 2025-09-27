@@ -259,7 +259,8 @@ async def handle_list_tools() -> list[Tool]:
             name="get_job_details",
             description=(
                 "Get detailed information about a specific job from stored search results. "
-                "Provide job_index (1-based) to select by position or job_query to fuzzy match when no index is supplied."
+                "Provide job_index (1-based) to select by position or query to fuzzy match when no index is supplied. "
+                "The legacy job_query alias is also accepted for backward compatibility."
             ),
             inputSchema={
                 "type": "object",
@@ -270,7 +271,7 @@ async def handle_list_tools() -> list[Tool]:
                     },
                     "query": {
                         "type": "string",
-                        "description": "Job title or company name to search for in previous results"
+                        "description": "Job title or company name to search for in previous results (alias: job_query)"
                     },
                     "job_index": {
                         "type": "integer",
@@ -349,6 +350,9 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
 
                 if not jobs:
                     formatted_output.append("No jobs found for this search term.")
+                    formatted_output.append(
+                        "Try adjusting your search terms or refining your search terms for better results."
+                    )
                 else:
                     for i, job in enumerate(jobs, 1):
                         formatted_output.append(f"\n{i}. {job['title']}")
@@ -388,6 +392,8 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
     elif name == "get_job_details":
         # Extract parameters
         query = arguments.get("query")
+        if query is None:
+            query = arguments.get("job_query")
         session_id = arguments.get("session_id")
         job_index = arguments.get("job_index")
 
