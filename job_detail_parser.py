@@ -5,7 +5,10 @@ Job detail parser for extracting comprehensive information from Stepstone job pa
 
 import re
 import logging
-from typing import List, Dict, Optional
+import random
+import time
+from itertools import cycle
+from typing import List, Dict, Optional, Sequence
 from bs4 import BeautifulSoup
 import requests
 from job_details_models import JobDetails, PageParseError, NetworkError
@@ -14,20 +17,89 @@ logger = logging.getLogger("stepstone-server")
 
 class JobDetailParser:
     """Parser for extracting detailed job information from Stepstone job pages"""
-    
-    def __init__(self):
-        self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    
+
+    DEFAULT_USER_AGENTS: Sequence[str] = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    )
+
+    def __init__(
+        self,
+        *,
+        min_delay: float = 0.5,
+        max_delay: float = 1.5,
+        max_retries: int = 3,
+        backoff_factor: float = 2.0,
+        user_agents: Optional[Sequence[str]] = None,
+        session: Optional[requests.Session] = None,
+        request_timeout: int = 15,
+    ):
+        if min_delay < 0 or max_delay < 0:
+            raise ValueError("Delay values must be non-negative")
+        if max_delay < min_delay:
+            raise ValueError("max_delay must be greater than or equal to min_delay")
+
+        self.min_delay = min_delay
+        self.max_delay = max_delay
+        self.max_retries = max_retries
+        self.backoff_factor = backoff_factor
+        self.request_timeout = request_timeout
+
+        agents = tuple(user_agents) if user_agents else self.DEFAULT_USER_AGENTS
+        if not agents:
+            raise ValueError("At least one User-Agent must be provided")
+        self._user_agent_cycle = cycle(agents)
+
+        self.base_headers = {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        self.headers = self.base_headers.copy()
+
+        self.session = session or requests.Session()
+
+    def _build_headers(self) -> Dict[str, str]:
+        headers = self.base_headers.copy()
+        headers["User-Agent"] = next(self._user_agent_cycle)
+        self.headers = headers
+        return headers
+
+    def _apply_throttle(self) -> float:
+        if self.max_delay == 0:
+            return 0.0
+        delay = random.uniform(self.min_delay, self.max_delay)
+        if delay > 0:
+            time.sleep(delay)
+        return delay
+
+    def _calculate_backoff(self, attempt: int) -> float:
+        backoff = self.min_delay * (self.backoff_factor ** attempt)
+        return max(backoff, 0.0)
+
     def fetch_job_page(self, url: str) -> str:
         """Fetch the HTML content of a job page"""
-        try:
-            response = requests.get(url, headers=self.headers, timeout=15)
-            response.raise_for_status()
-            return response.text
-        except requests.RequestException as e:
-            logger.error(f"Network error fetching job page {url}: {e}")
-            raise NetworkError(f"Failed to fetch job page: {str(e)}")
-    
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                self._apply_throttle()
+                response = self.session.get(
+                    url,
+                    headers=self._build_headers(),
+                    timeout=self.request_timeout,
+                )
+                response.raise_for_status()
+                return response.text
+            except requests.RequestException as e:
+                logger.error(f"Network error fetching job page {url}: {e}")
+                if attempt == self.max_retries:
+                    raise NetworkError(f"Failed to fetch job page: {str(e)}")
+                backoff = self._calculate_backoff(attempt)
+                if backoff > 0:
+                    time.sleep(backoff)
+
     def parse_job_details(self, url: str) -> JobDetails:
         """Parse comprehensive job details from a Stepstone job page"""
         try:
