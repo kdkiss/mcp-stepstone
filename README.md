@@ -485,7 +485,7 @@ curl -X POST http://localhost:8080/health
 python --version  # Should be 3.8+
 
 # Verify dependencies
-pip list | grep -E "(requests|beautifulsoup4|mcp|lxml)"
+pip list | grep -E "(requests|beautifulsoup4|mcp)"
 
 # Check file permissions
 ls -la stepstone_server.py
