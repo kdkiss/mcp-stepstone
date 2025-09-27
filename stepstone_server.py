@@ -9,28 +9,21 @@ Compatible with Smithery and other MCP clients.
 import asyncio
 import json
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
+from urllib.parse import quote
+
 import requests
 from bs4 import BeautifulSoup
-import re
-from urllib.parse import quote
 
 from mcp.server.models import InitializationOptions
 from mcp.server import NotificationOptions, Server
 from mcp.server.stdio import stdio_server
-from mcp.types import (
-    Resource,
-    Tool,
-    TextContent,
-    ImageContent,
-    EmbeddedResource,
-    LoggingLevel
-)
+from mcp.types import Resource, Tool
 import mcp.types as types
 
 # Import new modules
-from job_details_models import JobDetails, SearchSession
 from job_detail_parser import JobDetailParser
 from session_manager import session_manager
 
@@ -38,124 +31,166 @@ from session_manager import session_manager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("stepstone-server")
 
+
 class StepstoneJobScraper:
     """Job scraper for Stepstone.de"""
-    
+
     def __init__(self):
-        self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+
     def fetch_job_listings(self, url: str) -> List[Dict[str, str]]:
         """Fetch job listings from a Stepstone URL"""
         try:
             response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            container = soup.find('div', id='app-unifiedResultlist')
-            
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            container = soup.find("div", id="app-unifiedResultlist")
+
             if not container:
                 logger.warning(f"No job container found for URL: {url}")
                 return []
-            
+
             jobs = []
             seen_links = set()
-            
-            for article in container.find_all('article', attrs={'data-testid': 'job-item'}):
+
+            for article in container.find_all(
+                "article", attrs={"data-testid": "job-item"}
+            ):
                 # Find all links in the article
-                all_links = article.find_all('a', href=True)
-                
+                all_links = article.find_all("a", href=True)
+
                 job_link = None
                 job_title = None
-                
+
                 # First, look for job posting links with the correct pattern
                 for link_elem in all_links:
-                    href = link_elem.get('href', '')
-                    
+                    href = link_elem.get("href", "")
+
                     # Check for actual job posting URLs (contain stellenangebote and inline.html)
-                    if re.search(r'/stellenangebote--.*--\d+-inline\.html', href):
+                    if re.search(r"/stellenangebote--.*--\d+-inline\.html", href):
                         job_link = link_elem
                         job_title = link_elem.get_text(strip=True)
                         break
-                
+
                 # If no job posting link found, look for relative links starting with /stellenangebote
                 if not job_link:
                     for link_elem in all_links:
-                        href = link_elem.get('href', '')
+                        href = link_elem.get("href", "")
                         # Skip company profile links and external links
-                        if '/cmp/' in href or href.startswith('http'):
+                        if "/cmp/" in href or href.startswith("http"):
                             continue
                         # Look for job posting links that start with /stellenangebote
-                        if href.startswith('/stellenangebote') and 'inline.html' in href:
+                        if (
+                            href.startswith("/stellenangebote")
+                            and "inline.html" in href
+                        ):
                             job_link = link_elem
                             job_title = link_elem.get_text(strip=True)
                             break
-                
+
                 if not job_link:
                     continue
-                
+
                 # Extract job title from h2/h3 if available, otherwise use link text
                 if not job_title or len(job_title) < 5:
-                    title_elem = (article.find('h2') or
-                                 article.find('h3') or
-                                 article.find('span', attrs={'data-testid': re.compile('job-title')}))
+                    title_elem = (
+                        article.find("h2")
+                        or article.find("h3")
+                        or article.find(
+                            "span", attrs={"data-testid": re.compile("job-title")}
+                        )
+                    )
                     if title_elem:
                         job_title = title_elem.get_text(strip=True)
-                
-                title = job_title if job_title and len(job_title) > 0 else "Unknown Title"
-                
-                link = job_link['href']
-                
+
+                title = (
+                    job_title if job_title and len(job_title) > 0 else "Unknown Title"
+                )
+
+                link = job_link["href"]
+
                 # Ensure absolute URL
                 if not link.startswith("http"):
                     link = f"https://www.stepstone.de{link}"
-                
+
                 # Skip duplicates and company profile links
-                if link in seen_links or '/cmp/' in link:
+                if link in seen_links or "/cmp/" in link:
                     continue
                 seen_links.add(link)
-                
+
                 # Extract company information
-                company_elem = (article.find('span', class_=re.compile('company|employer')) or
-                               article.find('a', attrs={'data-testid': re.compile('company|employer')}) or
-                               article.find('span', attrs={'data-testid': re.compile('company|employer')}))
-                company = company_elem.get_text(strip=True) if company_elem else "Unknown Company"
-                
+                company_elem = (
+                    article.find("span", class_=re.compile("company|employer"))
+                    or article.find(
+                        "a", attrs={"data-testid": re.compile("company|employer")}
+                    )
+                    or article.find(
+                        "span", attrs={"data-testid": re.compile("company|employer")}
+                    )
+                )
+                company = (
+                    company_elem.get_text(strip=True)
+                    if company_elem
+                    else "Unknown Company"
+                )
+
                 # Extract short description
-                desc_elem = (article.find('p', class_=re.compile('description|snippet|teaser')) or
-                             article.find('div', class_=re.compile('description|snippet|teaser')) or
-                             article.find('span', class_=re.compile('description|snippet|teaser')))
-                description = desc_elem.get_text(strip=True)[:200] + "..." if desc_elem and desc_elem.get_text(strip=True) else "No description available"
-                
-                jobs.append({
-                    "title": title,
-                    "company": company,
-                    "description": description,
-                    "link": link
-                })
-            
+                desc_elem = (
+                    article.find("p", class_=re.compile("description|snippet|teaser"))
+                    or article.find(
+                        "div", class_=re.compile("description|snippet|teaser")
+                    )
+                    or article.find(
+                        "span", class_=re.compile("description|snippet|teaser")
+                    )
+                )
+                description = (
+                    desc_elem.get_text(strip=True)[:200] + "..."
+                    if desc_elem and desc_elem.get_text(strip=True)
+                    else "No description available"
+                )
+
+                jobs.append(
+                    {
+                        "title": title,
+                        "company": company,
+                        "description": description,
+                        "link": link,
+                    }
+                )
+
             logger.info(f"Found {len(jobs)} jobs for URL: {url}")
             return jobs
-            
+
         except requests.RequestException as e:
             logger.error(f"Request failed for URL {url}: {e}")
             return []
         except Exception as e:
             logger.error(f"Unexpected error scraping URL {url}: {e}")
             return []
-    
-    def build_search_url(self, term: str, zip_code: str = "40210", radius: int = 5) -> str:
+
+    def build_search_url(
+        self, term: str, zip_code: str = "40210", radius: int = 5
+    ) -> str:
         """Build Stepstone search URL"""
         encoded_term = quote(term)
         return f"https://www.stepstone.de/jobs/{encoded_term}/in-{zip_code}?radius={radius}&searchOrigin=Homepage_top-search&q=%22{encoded_term}%22"
-    
-    def _search_single_term(self, term: str, zip_code: str, radius: int) -> tuple[str, List[Dict[str, str]]]:
+
+    def _search_single_term(
+        self, term: str, zip_code: str, radius: int
+    ) -> tuple[str, List[Dict[str, str]]]:
         """Helper for concurrently searching a single term."""
         logger.info(f"Searching for jobs with term: {term}")
         url = self.build_search_url(term, zip_code, radius)
         jobs = self.fetch_job_listings(url)
         return term, jobs
 
-    def search_jobs(self, search_terms: List[str], zip_code: str = "40210", radius: int = 5) -> Dict[str, List[Dict[str, str]]]:
+    def search_jobs(
+        self, search_terms: List[str], zip_code: str = "40210", radius: int = 5
+    ) -> Dict[str, List[Dict[str, str]]]:
         """Search for jobs using multiple terms"""
         results: Dict[str, List[Dict[str, str]]] = {}
 
@@ -177,9 +212,11 @@ class StepstoneJobScraper:
         ordered_results = {term: results.get(term, []) for term in search_terms}
         return ordered_results
 
+
 # Initialize the server
 server = Server("stepstone-job-search")
 scraper = StepstoneJobScraper()
+
 
 @server.list_resources()
 async def handle_list_resources() -> list[Resource]:
@@ -192,6 +229,7 @@ async def handle_list_resources() -> list[Resource]:
             mimeType="text/plain",
         )
     ]
+
 
 @server.read_resource()
 async def handle_read_resource(uri: str) -> str:
@@ -223,6 +261,7 @@ Use the search_jobs tool with terms like "fraud specialist", "betrug", "complian
     else:
         raise ValueError(f"Unknown resource: {uri}")
 
+
 @server.list_tools()
 async def handle_list_tools() -> list[Tool]:
     """List available tools"""
@@ -237,22 +276,22 @@ async def handle_list_tools() -> list[Tool]:
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "List of job search terms to look for",
-                        "default": ["fraud", "betrug", "compliance"]
+                        "default": ["fraud", "betrug", "compliance"],
                     },
                     "zip_code": {
                         "type": "string",
                         "description": "German postal code for location-based search",
-                        "default": "40210"
+                        "default": "40210",
                     },
                     "radius": {
                         "type": "integer",
                         "description": "Search radius in kilometers",
                         "default": 5,
                         "minimum": 1,
-                        "maximum": 100
-                    }
+                        "maximum": 100,
+                    },
                 },
-                "required": []
+                "required": [],
             },
         ),
         Tool(
@@ -266,64 +305,72 @@ async def handle_list_tools() -> list[Tool]:
                 "properties": {
                     "session_id": {
                         "type": "string",
-                        "description": "Session ID from a previous search (optional; latest active session will be used if omitted)"
+                        "description": "Session ID from a previous search (optional; latest active session will be used if omitted)",
                     },
                     "query": {
                         "type": "string",
-                        "description": "Job title or company name to search for in previous results"
+                        "description": "Job title or company name to search for in previous results",
                     },
                     "job_index": {
                         "type": "integer",
                         "description": "Index of the job in previous results (1-based, optional)",
-                        "minimum": 1
-
-                    }
+                        "minimum": 1,
+                    },
                 },
-                "required": []
+                "required": [],
             },
-        )
+        ),
     ]
+
 
 @server.call_tool()
 async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     """Handle tool calls"""
     logger.info(f"Tool called: {name} with arguments: {arguments}")
-    
+
     if name == "search_jobs":
         # Extract parameters with defaults
         search_terms = arguments.get("search_terms", ["fraud", "betrug", "compliance"])
         zip_code = arguments.get("zip_code", "40210")
         radius = arguments.get("radius", 5)
-        
+
         # Validate parameters
         if not isinstance(search_terms, list) or not search_terms:
-            return [types.TextContent(
-                type="text",
-                text="Error: search_terms must be a non-empty list of strings"
-            )]
-        
+            return [
+                types.TextContent(
+                    type="text",
+                    text="Error: search_terms must be a non-empty list of strings",
+                )
+            ]
+
         if not isinstance(zip_code, str) or len(zip_code) != 5:
-            return [types.TextContent(
-                type="text",
-                text="Error: zip_code must be a 5-digit German postal code string"
-            )]
-        
+            return [
+                types.TextContent(
+                    type="text",
+                    text="Error: zip_code must be a 5-digit German postal code string",
+                )
+            ]
+
         if not isinstance(radius, int) or radius < 1 or radius > 100:
-            return [types.TextContent(
-                type="text",
-                text="Error: radius must be an integer between 1 and 100"
-            )]
-        
+            return [
+                types.TextContent(
+                    type="text",
+                    text="Error: radius must be an integer between 1 and 100",
+                )
+            ]
+
         try:
             # Perform the job search without blocking the event loop
-            logger.info(f"Searching jobs with terms: {search_terms}, zip: {zip_code}, radius: {radius}")
+            logger.info(
+                f"Searching jobs with terms: {search_terms}, zip: {zip_code}, radius: {radius}"
+            )
             results = await asyncio.to_thread(
                 scraper.search_jobs,
                 search_terms,
                 zip_code,
                 radius,
             )
-            
+
             # Create session for search results
             all_jobs = []
             for term, jobs in results.items():
@@ -337,7 +384,9 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                     radius,
                 )
 
-            session = session_manager.create_session(all_jobs, search_terms, zip_code, radius)
+            session = session_manager.create_session(
+                all_jobs, search_terms, zip_code, radius
+            )
 
             # Format results for display
             formatted_output = []
@@ -368,23 +417,20 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 tip_example = "your saved job title"
             summary += (
                 "\n💡 Tip: Use 'get_job_details' tool with "
-                f"query=\"{tip_example}\" to get more details about any job!"
+                f'query="{tip_example}" to get more details about any job!'
             )
-            
+
             full_response = summary + "\n".join(formatted_output)
 
-            
-            return [types.TextContent(
-                type="text",
-                text=full_response
-            )]
-            
+            return [types.TextContent(type="text", text=full_response)]
+
         except Exception as e:
             logger.error(f"Error in search_jobs: {e}")
-            return [types.TextContent(
-                type="text",
-                text=f"Error performing job search: {str(e)}"
-            )]
+            return [
+                types.TextContent(
+                    type="text", text=f"Error performing job search: {str(e)}"
+                )
+            ]
     elif name == "get_job_details":
         # Extract parameters
         query = arguments.get("query")
@@ -394,16 +440,20 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
         # Validate parameters
         if job_index is not None:
             if not isinstance(job_index, int) or job_index < 1:
-                return [types.TextContent(
-                    type="text",
-                    text="Error: job_index must be an integer greater than or equal to 1"
-                )]
+                return [
+                    types.TextContent(
+                        type="text",
+                        text="Error: job_index must be an integer greater than or equal to 1",
+                    )
+                ]
 
         if not query and job_index is None:
-            return [types.TextContent(
-                type="text",
-                text="Error: provide either a query string or a job_index to identify the job"
-            )]
+            return [
+                types.TextContent(
+                    type="text",
+                    text="Error: provide either a query string or a job_index to identify the job",
+                )
+            ]
 
         try:
             # Get job details
@@ -418,78 +468,100 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             if session_id:
                 resolved_session = session_manager.get_session(session_id)
                 if not resolved_session:
-                    return [types.TextContent(
-                        type="text",
-                        text=(
-                            "Session not found or expired. Please provide an active session_id or run a new job search."
+                    return [
+                        types.TextContent(
+                            type="text",
+                            text=(
+                                "Session not found or expired. Please provide an active session_id or run a new job search."
+                            ),
                         )
-                    )]
+                    ]
             else:
                 resolved_session = session_manager.get_recent_session()
                 if not resolved_session:
 
-                    return [types.TextContent(
-                        type="text",
-                        text="No jobs available in the selected session. Please perform a new search."
-                    )]
+                    return [
+                        types.TextContent(
+                            type="text",
+                            text="No jobs available in the selected session. Please perform a new search.",
+                        )
+                    ]
 
             job = None
 
             if job_index is not None:
-                job = session_manager.get_job_by_index(resolved_session.session_id, job_index)
+                job = session_manager.get_job_by_index(
+                    resolved_session.session_id, job_index
+                )
                 if not job:
                     total_jobs = len(resolved_session.results)
                     if total_jobs:
                         hint = f"Valid job_index values are between 1 and {total_jobs}."
                     else:
                         hint = "There are no stored jobs for this session yet. Run a job search first."
-                    return [types.TextContent(
-                        type="text",
-                        text="No job found at the requested index. " + hint
-                    )]
+                    return [
+                        types.TextContent(
+                            type="text",
+                            text="No job found at the requested index. " + hint,
+                        )
+                    ]
 
             if job is None and query:
-                job = session_manager.find_job_in_session(resolved_session.session_id, query)
+                job = session_manager.find_job_in_session(
+                    resolved_session.session_id, query
+                )
                 if not job:
-                    return [types.TextContent(
-                        type="text",
-                        text=f"No job found matching: {query}"
-                    )]
-
+                    return [
+                        types.TextContent(
+                            type="text", text=f"No job found matching: {query}"
+                        )
+                    ]
 
             # Parse job details
             parser = JobDetailParser()
-            details = await asyncio.to_thread(parser.parse_job_details, job['link'])
-            
+            details = await asyncio.to_thread(parser.parse_job_details, job["link"])
+
             if not details:
-                return [types.TextContent(
-                    type="text",
-                    text=f"Could not retrieve details for job: {job['title']}"
-                )]
-            
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"Could not retrieve details for job: {job['title']}",
+                    )
+                ]
+
             # Format detailed response
             formatted_output = []
-            formatted_output.append(f"📋 Job Details: {str(details.title or 'Unknown Title')}")
-            formatted_output.append(f"🏢 Company: {str(details.company or 'Unknown Company')}")
-            
+            formatted_output.append(
+                f"📋 Job Details: {str(details.title or 'Unknown Title')}"
+            )
+            formatted_output.append(
+                f"🏢 Company: {str(details.company or 'Unknown Company')}"
+            )
+
             if details.location:
                 formatted_output.append(f"📍 Location: {str(details.location)}")
-            
+
             if details.salary:
                 formatted_output.append(f"💰 Salary: {str(details.salary)}")
-            
+
             if details.employment_type:
-                formatted_output.append(f"⏰ Employment Type: {str(details.employment_type)}")
-            
+                formatted_output.append(
+                    f"⏰ Employment Type: {str(details.employment_type)}"
+                )
+
             if details.posted_date:
                 formatted_output.append(f"📅 Posted: {str(details.posted_date)}")
-            
+
             formatted_output.append("")
             formatted_output.append("📝 Description:")
             # Ensure description is a string
-            description_str = str(details.description) if details.description else "No description available"
+            description_str = (
+                str(details.description)
+                if details.description
+                else "No description available"
+            )
             formatted_output.append(description_str)
-            
+
             if details.requirements:
                 formatted_output.append("")
                 formatted_output.append("✅ Requirements:")
@@ -498,11 +570,11 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                     if isinstance(req, dict):
                         req_str = json.dumps(req, ensure_ascii=False)
                     elif isinstance(req, list):
-                        req_str = ', '.join(str(item) for item in req)
+                        req_str = ", ".join(str(item) for item in req)
                     else:
                         req_str = str(req) if req is not None else ""
                     formatted_output.append(f"  • {req_str}")
-            
+
             if details.benefits:
                 formatted_output.append("")
                 formatted_output.append("🎁 Benefits:")
@@ -511,39 +583,42 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                     if isinstance(benefit, dict):
                         benefit_str = json.dumps(benefit, ensure_ascii=False)
                     elif isinstance(benefit, list):
-                        benefit_str = ', '.join(str(item) for item in benefit)
+                        benefit_str = ", ".join(str(item) for item in benefit)
                     else:
                         benefit_str = str(benefit) if benefit is not None else ""
                     formatted_output.append(f"  • {benefit_str}")
-            
+
             if details.contact_info:
                 formatted_output.append("")
                 formatted_output.append("📞 Contact:")
                 if isinstance(details.contact_info, dict):
                     contact_str = json.dumps(details.contact_info, ensure_ascii=False)
                 elif isinstance(details.contact_info, list):
-                    contact_str = ', '.join(str(item) for item in details.contact_info)
+                    contact_str = ", ".join(str(item) for item in details.contact_info)
                 else:
-                    contact_str = str(details.contact_info) if details.contact_info else "No contact information available"
+                    contact_str = (
+                        str(details.contact_info)
+                        if details.contact_info
+                        else "No contact information available"
+                    )
                 formatted_output.append(contact_str)
-            
+
             formatted_output.append("")
-            apply_url = str(details.job_url or job['link'])
+            apply_url = str(details.job_url or job["link"])
             formatted_output.append(f"🔗 Apply: {apply_url}")
-            
-            return [types.TextContent(
-                type="text",
-                text="\n".join(formatted_output)
-            )]
-            
+
+            return [types.TextContent(type="text", text="\n".join(formatted_output))]
+
         except Exception as e:
             logger.error(f"Error in get_job_details: {e}")
-            return [types.TextContent(
-                type="text",
-                text=f"Error retrieving job details: {str(e)}"
-            )]
+            return [
+                types.TextContent(
+                    type="text", text=f"Error retrieving job details: {str(e)}"
+                )
+            ]
     else:
         raise ValueError(f"Unknown tool: {name}")
+
 
 async def main():
     """Main entry point for the server"""
@@ -556,13 +631,14 @@ async def main():
             experimental_capabilities={},
         ),
     )
-    
+
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,
             write_stream,
             options,
         )
+
 
 if __name__ == "__main__":
     asyncio.run(main())
