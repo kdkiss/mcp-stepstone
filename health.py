@@ -6,6 +6,7 @@ Simple health check script for the Stepstone MCP server
 import sys
 import json
 
+
 def health_check():
     """Basic health check"""
     try:
@@ -13,7 +14,7 @@ def health_check():
         import requests
         import bs4
         import mcp
-        
+
         return {
             "status": "healthy",
             "service": "stepstone-job-search",
@@ -24,6 +25,7 @@ def health_check():
             "status": "unhealthy",
             "error": f"Missing dependency: {e}"
         }
+
 
 if __name__ == "__main__":
     result = health_check()

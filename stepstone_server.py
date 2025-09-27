@@ -307,9 +307,12 @@ async def handle_list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Session ID from a previous search (optional; latest active session will be used if omitted)",
                     },
-                    "query": {
+                    "job_query": {
                         "type": "string",
-                        "description": "Job title or company name to search for in previous results",
+                        "description": (
+                            "Job title or company name to search for in previous results. "
+                            "Deprecated alias 'query' remains supported for compatibility."
+                        ),
                     },
                     "job_index": {
                         "type": "integer",
@@ -415,12 +418,15 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             summary += f"Session ID: {session}\n"
             if all_jobs:
                 tip_example = all_jobs[0]["title"]
+                summary += (
+                    "\n💡 Tip: Use 'get_job_details' tool with "
+                    f'job_query="{tip_example}" to get more details about any job!'
+                )
             else:
-                tip_example = "your saved job title"
-            summary += (
-                "\n💡 Tip: Use 'get_job_details' tool with "
-                f'query="{tip_example}" to get more details about any job!'
-            )
+                summary += (
+                    "\n💡 Tip: Try adjusting your search terms or refining your search terms "
+                    "for broader results."
+                )
 
             full_response = summary + "\n".join(formatted_output)
 
@@ -435,7 +441,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             ]
     elif name == "get_job_details":
         # Extract parameters
-        query = arguments.get("query")
+        query = arguments.get("job_query") or arguments.get("query")
         session_id = arguments.get("session_id")
         job_index = arguments.get("job_index")
 
