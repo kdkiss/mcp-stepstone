@@ -64,6 +64,21 @@ def test_search_jobs_with_no_terms_returns_empty(monkeypatch, scraper):
     assert call_count == 0
 
 
+def test_search_jobs_normalizes_terms(monkeypatch, scraper):
+    observed_terms = []
+
+    def fake_fetch(self, url):
+        observed_terms.append(unquote(url.split("/jobs/")[1].split("/in-")[0]))
+        return []
+
+    monkeypatch.setattr(StepstoneJobScraper, "fetch_job_listings", fake_fetch)
+
+    results = scraper.search_jobs([" Fraud ", "fraud", "DATA", "data", ""], zip_code="12345", radius=15)
+
+    assert observed_terms == ["Fraud", "DATA"]
+    assert results == {"Fraud": [], "DATA": []}
+
+
 SAMPLE_HTML = """
 <html>
     <body>

@@ -40,6 +40,32 @@ class StepstoneJobScraper:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
 
+    def normalize_search_terms(self, search_terms: List[str]) -> List[str]:
+        """Clean and deduplicate search terms while preserving order."""
+
+        normalized_terms: List[str] = []
+        seen_terms: set[str] = set()
+
+        for term in search_terms:
+            if not isinstance(term, str):
+                logger.debug("Skipping non-string search term: %r", term)
+                continue
+
+            cleaned_term = term.strip()
+            if not cleaned_term:
+                logger.debug("Skipping empty search term after stripping: %r", term)
+                continue
+
+            key = cleaned_term.casefold()
+            if key in seen_terms:
+                logger.debug("Skipping duplicate search term: %s", cleaned_term)
+                continue
+
+            seen_terms.add(key)
+            normalized_terms.append(cleaned_term)
+
+        return normalized_terms
+
     def fetch_job_listings(self, url: str) -> List[Dict[str, str]]:
         """Fetch job listings from a Stepstone URL"""
         try:
@@ -194,22 +220,24 @@ class StepstoneJobScraper:
         """Search for jobs using multiple terms"""
         results: Dict[str, List[Dict[str, str]]] = {}
 
-        if not search_terms:
+        normalized_terms = self.normalize_search_terms(search_terms)
+
+        if not normalized_terms:
             return results
 
-        max_workers = min(8, len(search_terms))
+        max_workers = min(8, len(normalized_terms))
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [
                 executor.submit(self._search_single_term, term, zip_code, radius)
-                for term in search_terms
+                for term in normalized_terms
             ]
 
             for future in as_completed(futures):
                 term, jobs = future.result()
                 results[term] = jobs
 
-        ordered_results = {term: results.get(term, []) for term in search_terms}
+        ordered_results = {term: results.get(term, []) for term in normalized_terms}
         return ordered_results
 
 
@@ -346,6 +374,15 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 )
             ]
 
+        normalized_terms = scraper.normalize_search_terms(search_terms)
+        if not normalized_terms:
+            return [
+                types.TextContent(
+                    type="text",
+                    text="Error: search_terms must contain at least one non-empty string",
+                )
+            ]
+
         if not isinstance(zip_code, str) or len(zip_code) != 5:
             return [
                 types.TextContent(
@@ -365,11 +402,11 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
         try:
             # Perform the job search without blocking the event loop
             logger.info(
-                f"Searching jobs with terms: {search_terms}, zip: {zip_code}, radius: {radius}"
+                f"Searching jobs with terms: {normalized_terms}, zip: {zip_code}, radius: {radius}"
             )
             results = await asyncio.to_thread(
                 scraper.search_jobs,
-                search_terms,
+                normalized_terms,
                 zip_code,
                 radius,
             )
@@ -382,13 +419,13 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             if not all_jobs:
                 logger.info(
                     "Job search returned no results for terms=%s zip=%s radius=%s",
-                    search_terms,
+                    normalized_terms,
                     zip_code,
                     radius,
                 )
 
             session = session_manager.create_session(
-                all_jobs, search_terms, zip_code, radius
+                all_jobs, normalized_terms, zip_code, radius
             )
 
             # Format results for display
@@ -412,7 +449,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
 
             # Add summary
             summary = f"Job Search Summary:\n"
-            summary += f"Search Terms: {', '.join(search_terms)}\n"
+            summary += f"Search Terms: {', '.join(normalized_terms)}\n"
             summary += f"Location: {zip_code} (±{radius}km)\n"
             summary += f"Total Jobs Found: {total_jobs}\n"
             summary += f"Session ID: {session}\n"

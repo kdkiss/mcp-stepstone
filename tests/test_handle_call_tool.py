@@ -45,6 +45,26 @@ def test_handle_call_tool_search_jobs_success(monkeypatch):
     assert "Session ID:" in text
 
 
+def test_handle_call_tool_search_jobs_sanitizes_terms(monkeypatch):
+    captured_terms: Dict[str, List[str]] = {}
+
+    def fake_search(terms, zip_code, radius):
+        captured_terms["terms"] = terms
+        return {term: [] for term in terms}
+
+    monkeypatch.setattr(scraper, "search_jobs", fake_search)
+
+    response = asyncio.run(
+        handle_call_tool(
+            "search_jobs",
+            {"search_terms": [" Fraud ", "fraud", "DATA"], "zip_code": "40210", "radius": 5},
+        )
+    )
+
+    assert captured_terms["terms"] == ["Fraud", "DATA"]
+    assert "Search Terms: Fraud, DATA" in response[0].text
+
+
 def test_handle_call_tool_search_jobs_empty_results(monkeypatch):
     monkeypatch.setattr(scraper, "search_jobs", lambda *args, **kwargs: {"fraud": []})
 
@@ -65,6 +85,14 @@ def test_handle_call_tool_search_jobs_error(monkeypatch):
     response = asyncio.run(handle_call_tool("search_jobs", {"search_terms": ["fraud"]}))
 
     assert "Error performing job search: network down" in response[0].text
+
+
+def test_handle_call_tool_search_jobs_requires_non_empty_terms():
+    response = asyncio.run(
+        handle_call_tool("search_jobs", {"search_terms": ["   ", ""]})
+    )
+
+    assert response[0].text == "Error: search_terms must contain at least one non-empty string"
 
 
 def test_handle_call_tool_get_job_details_success(monkeypatch):
