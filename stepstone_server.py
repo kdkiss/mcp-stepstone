@@ -333,18 +333,48 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
 
     if name == "search_jobs":
         # Extract parameters with defaults
-        search_terms = arguments.get("search_terms", ["fraud", "betrug", "compliance"])
+        raw_terms = arguments.get("search_terms", ["fraud", "betrug", "compliance"])
         zip_code = arguments.get("zip_code", "40210")
         radius = arguments.get("radius", 5)
 
         # Validate parameters
-        if not isinstance(search_terms, list) or not search_terms:
+        if not isinstance(raw_terms, list) or not raw_terms:
             return [
                 types.TextContent(
                     type="text",
                     text="Error: search_terms must be a non-empty list of strings",
                 )
             ]
+
+        # Normalize search terms by removing blank entries and duplicates while
+        # preserving order. Any non-string entries are ignored with a warning so
+        # that the user receives a clear validation message if everything was
+        # filtered out.
+        cleaned_terms: list[str] = []
+        seen_terms: set[str] = set()
+        for term in raw_terms:
+            if not isinstance(term, str):
+                logger.warning("Ignoring non-string search term: %r", term)
+                continue
+
+            normalized = term.strip()
+            if not normalized:
+                logger.warning("Ignoring empty search term entry")
+                continue
+
+            if normalized not in seen_terms:
+                seen_terms.add(normalized)
+                cleaned_terms.append(normalized)
+
+        if not cleaned_terms:
+            return [
+                types.TextContent(
+                    type="text",
+                    text="Error: search_terms must contain at least one non-empty string",
+                )
+            ]
+
+        search_terms = cleaned_terms
 
         if not isinstance(zip_code, str) or len(zip_code) != 5:
             return [

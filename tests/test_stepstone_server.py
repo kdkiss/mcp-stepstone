@@ -38,3 +38,33 @@ async def test_search_jobs_no_results(monkeypatch, caplog):
 
     assert any("returned no results" in record.getMessage() for record in caplog.records)
 
+
+@pytest.mark.anyio("asyncio")
+async def test_search_jobs_invalid_terms(monkeypatch, caplog):
+    def fake_search_jobs(*args, **kwargs):
+        pytest.fail("search_jobs should not be invoked when validation fails")
+
+    def fake_create_session(*args, **kwargs):
+        pytest.fail("create_session should not be invoked when validation fails")
+
+    monkeypatch.setattr(stepstone_server.scraper, "search_jobs", fake_search_jobs)
+    monkeypatch.setattr(
+        stepstone_server.session_manager, "create_session", fake_create_session
+    )
+
+    with caplog.at_level("WARNING"):
+        response = await stepstone_server.handle_call_tool(
+            "search_jobs",
+            {"search_terms": [" ", 123], "zip_code": "40210", "radius": 5},
+        )
+
+    assert response
+    message = response[0].text
+    assert (
+        message
+        == "Error: search_terms must contain at least one non-empty string"
+    )
+    logged_messages = [record.getMessage() for record in caplog.records]
+    assert any("Ignoring non-string search term" in msg for msg in logged_messages)
+    assert any("Ignoring empty search term entry" in msg for msg in logged_messages)
+
