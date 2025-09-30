@@ -1,4 +1,5 @@
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
@@ -57,3 +58,45 @@ def test_find_job_in_session_returns_none_when_all_entries_invalid():
 
     match = manager.find_job_in_session(session_id, "engineer")
     assert match is None
+
+
+def test_get_active_session_overview_formats_metadata_and_sorts():
+    manager = SessionManager()
+
+    old_session_id = manager.create_session(
+        results=[{"title": "Data Scientist", "company": "ACME"}],
+        search_terms=["data scientist"],
+        zip_code="10115",
+        radius=10,
+    )
+
+    new_session_id = manager.create_session(
+        results=[{"title": "Backend Engineer", "company": "Beta"}],
+        search_terms=None,
+        zip_code="20095",
+        radius=15,
+    )
+
+    # Make the first session older so that ordering can be asserted reliably
+    manager.sessions[old_session_id].timestamp -= timedelta(seconds=120)
+    manager.sessions[new_session_id].timestamp -= timedelta(seconds=30)
+
+    overview = manager.get_active_session_overview()
+
+    assert [entry["session_id"] for entry in overview] == [new_session_id, old_session_id]
+
+    newest = overview[0]
+    assert newest == {
+        "session_id": new_session_id,
+        "search_terms": "None",
+        "location": "20095 (±15km)",
+        "result_count": 1,
+        "age_seconds": newest["age_seconds"],
+    }
+    assert newest["age_seconds"] >= 30
+    assert newest["age_seconds"] < 180
+
+    oldest = overview[1]
+    assert oldest["search_terms"] == "data scientist"
+    assert oldest["location"] == "10115 (±10km)"
+    assert oldest["result_count"] == 1
