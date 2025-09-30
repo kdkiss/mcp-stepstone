@@ -202,5 +202,45 @@ class SessionManager:
         self._cleanup_expired_sessions()
         return list(self.sessions.keys())
 
+    def get_active_session_overview(self) -> List[Dict[str, object]]:
+        """Return lightweight metadata for each active session.
+
+        The overview is sorted by most recent session first so clients can
+        easily present the freshest results to the user. Each overview entry
+        contains human friendly values that are ready for display without
+        requiring additional processing downstream.
+        """
+
+        self._cleanup_expired_sessions()
+
+        if not self.sessions:
+            return []
+
+        current_time = datetime.now()
+        overview: List[Dict[str, object]] = []
+
+        # Sort sessions by recency so that the freshest search appears first
+        for session in sorted(
+            self.sessions.values(), key=lambda s: s.timestamp, reverse=True
+        ):
+            search_terms_text = (
+                ", ".join(session.search_terms) if session.search_terms else "None"
+            )
+
+            overview.append(
+                {
+                    "session_id": session.session_id,
+                    "search_terms": search_terms_text,
+                    "location": f"{session.zip_code} (±{session.radius}km)",
+                    "result_count": len(session.results),
+                    "age_seconds": max(
+                        0,
+                        int((current_time - session.timestamp).total_seconds()),
+                    ),
+                }
+            )
+
+        return overview
+
 # Global session manager instance
 session_manager = SessionManager()
