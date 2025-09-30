@@ -70,6 +70,19 @@ pytest
 
 All tests run locally without external Stepstone traffic thanks to mocked HTML fixtures and patched network calls.
 
+## 🛠️ Local Development
+
+If you want to explore the server responses while iterating on the scraper or tool logic, the repository contains a lightweight
+debug server that serves the bundled HTML fixtures. You can start it from the project root with:
+
+```bash
+python debug_server.py
+```
+
+Then, open `http://127.0.0.1:5000` in your browser to inspect the mocked Stepstone pages that power the tests. This is
+especially helpful when adjusting selectors or adding support for new layout variations because you can compare the rendered
+fixtures with the parsed output in real time.
+
 ## 🔧 Configuration
 
 ### MCP Client Configuration
