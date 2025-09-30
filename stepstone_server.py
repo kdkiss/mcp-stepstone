@@ -346,11 +346,32 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 )
             ]
 
-        if not isinstance(zip_code, str) or len(zip_code) != 5:
+        normalized_terms: list[str] = []
+        for term in search_terms:
+            if not isinstance(term, str):
+                return [
+                    types.TextContent(
+                        type="text",
+                        text="Error: search_terms must contain only non-empty strings",
+                    )
+                ]
+
+            stripped = term.strip()
+            if not stripped:
+                return [
+                    types.TextContent(
+                        type="text",
+                        text="Error: search_terms must contain only non-empty strings",
+                    )
+                ]
+
+            normalized_terms.append(stripped)
+
+        if not isinstance(zip_code, str) or len(zip_code) != 5 or not zip_code.isdigit():
             return [
                 types.TextContent(
                     type="text",
-                    text="Error: zip_code must be a 5-digit German postal code string",
+                    text="Error: zip_code must be a 5-digit numeric German postal code string",
                 )
             ]
 
@@ -365,11 +386,14 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
         try:
             # Perform the job search without blocking the event loop
             logger.info(
-                f"Searching jobs with terms: {search_terms}, zip: {zip_code}, radius: {radius}"
+                "Searching jobs with terms: %s, zip: %s, radius: %s",
+                normalized_terms,
+                zip_code,
+                radius,
             )
             results = await asyncio.to_thread(
                 scraper.search_jobs,
-                search_terms,
+                normalized_terms,
                 zip_code,
                 radius,
             )
@@ -388,7 +412,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 )
 
             session = session_manager.create_session(
-                all_jobs, search_terms, zip_code, radius
+                all_jobs, normalized_terms, zip_code, radius
             )
 
             # Format results for display
@@ -412,7 +436,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
 
             # Add summary
             summary = f"Job Search Summary:\n"
-            summary += f"Search Terms: {', '.join(search_terms)}\n"
+            summary += f"Search Terms: {', '.join(normalized_terms)}\n"
             summary += f"Location: {zip_code} (±{radius}km)\n"
             summary += f"Total Jobs Found: {total_jobs}\n"
             summary += f"Session ID: {session}\n"
