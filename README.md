@@ -1,94 +1,97 @@
 # Stepstone Job Search MCP Server
 
-A Model Context Protocol (MCP) server for searching job listings on Stepstone.de. This server transforms job search functionality into a tool that can be used with MCP-compatible clients like Smithery, Claude Desktop, and other AI assistants.
-
 [![smithery badge](https://smithery.ai/badge/@kdkiss/mcp-stepstone)](https://smithery.ai/server/@kdkiss/mcp-stepstone)
 
-## 🎯 Overview
+An [Model Context Protocol (MCP)](https://github.com/modelcontextprotocol/specification) server that lets MCP-compatible clients search the German job portal [Stepstone.de](https://www.stepstone.de). The service exposes a pair of tools for running multi-term job searches and fetching rich job details so assistants such as Claude Desktop or Smithery can surface up-to-date vacancies.
 
-**`mcp-stepstone`** is an MCP-compatible CLI module that fetches job listings from [Stepstone.de](https://www.stepstone.de) based on dynamic keywords and location parameters. It provides a standardized interface for AI assistants to access real-time job market data from Germany's largest job portal.
+---
 
-## ✨ Features
+## Table of Contents
 
-- 🔍 **Multi-term Search**: Search job listings using multiple keywords simultaneously
-- 📍 **Location-based Search**: German postal code targeting with configurable radius
-- 🎯 **Smart Filtering**: Duplicate job detection and removal
-- 🛡️ **Robust Error Handling**: Comprehensive logging and graceful failure recovery
-- 📊 **Structured Data**: Clean JSON output with job title, company, location, and direct links
-- 🔄 **Real-time Data**: Live scraping of Stepstone.de for current job postings
-- 🏗️ **MCP Compliant**: Full Model Context Protocol implementation
-- 🐳 **Docker Ready**: Containerized deployment support
-- 🔧 **Configurable**: Environment-based configuration for production use
-- 📝 **Follow-up Questions**: Get detailed job information after initial searches
+1. [Key Features](#key-features)
+2. [Quick Start](#quick-start)
+3. [Configuration](#configuration)
+4. [Usage](#usage)
+5. [Architecture Overview](#architecture-overview)
+6. [Local Development](#local-development)
+7. [Testing](#testing)
+8. [Troubleshooting](#troubleshooting)
+9. [Contributing](#contributing)
+10. [Support](#support)
+11. [Version History](#version-history)
+12. [License](#license)
 
-## 🚀 Quick Start
+---
+
+## Key Features
+
+- 🔍 **Multi-term Search** – Concurrently queries Stepstone for every search phrase you supply and deduplicates duplicate postings.
+- 📍 **Location Targeting** – Supports German postal codes with a configurable radius (1–100 km) for regional searches.
+- 🧠 **Session-aware Follow-ups** – Saves results for one hour so you can request full job details later via `get_job_details`.
+- 🛡️ **Robust Validation** – Defensive parameter validation, logging, and graceful error messages for malformed requests.
+- 🐳 **Container & CLI Friendly** – Works as a plain Python process or inside Docker; integrates cleanly with Smithery and Claude Desktop.
+
+> ℹ️ **Note:** A Redis cache and other scaling features are mentioned as future enhancements. They are not enabled in the current release.
+
+---
+
+## Quick Start
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- pip package manager
-- Internet connection for Stepstone.de access
+- Python 3.8+
+- `pip`
+- Internet access to reach Stepstone.de when running real searches
 
 ### Installation Options
 
-#### Option 1: Smithery (Recommended)
+<details>
+<summary><strong>Option 1 · Install with Smithery (Recommended)</strong></summary>
+
 ```bash
 npx -y @smithery/cli install @kdkiss/mcp-stepstone --client claude
 ```
 
-#### Option 2: Manual Installation
+</details>
+
+<details>
+<summary><strong>Option 2 · Manual Setup</strong></summary>
+
 ```bash
-# Clone or download the repository
-git clone <repository-url>
+# Clone the repository
+git clone https://github.com/kdkiss/mcp-stepstone.git
 cd mcp-stepstone
 
-# Install dependencies
+# Install runtime dependencies
 pip install -r requirements.txt
 
-# Make executable (Unix systems)
+# (Optional) make the server script executable on Unix-like systems
 chmod +x stepstone_server.py
 ```
 
-#### Option 3: Docker
+</details>
+
+<details>
+<summary><strong>Option 3 · Docker</strong></summary>
+
 ```bash
-# Build the container
+# Build the image
 docker build -t mcp-stepstone .
 
 # Run the container
-docker run -it mcp-stepstone
+docker run -it --rm mcp-stepstone
 ```
 
-## 🧪 Testing
+</details>
 
-The project includes unit tests for the scraper, job detail parser, and MCP tool flows. After installing the runtime dependencies,
-install `pytest` and run the test suite:
+---
 
-```bash
-pip install -r requirements.txt pytest
-pytest
-```
-
-All tests run locally without external Stepstone traffic thanks to mocked HTML fixtures and patched network calls.
-
-## 🛠️ Local Development
-
-If you want to explore the server responses while iterating on the scraper or tool logic, the repository contains a lightweight
-debug server that serves the bundled HTML fixtures. You can start it from the project root with:
-
-```bash
-python debug_server.py
-```
-
-Then, open `http://127.0.0.1:5000` in your browser to inspect the mocked Stepstone pages that power the tests. This is
-especially helpful when adjusting selectors or adding support for new layout variations because you can compare the rendered
-fixtures with the parsed output in real time.
-
-## 🔧 Configuration
+## Configuration
 
 ### MCP Client Configuration
 
-#### Smithery Configuration
-Add to your `mcp.json`:
+#### Smithery `mcp.json`
+
 ```json
 {
   "mcpServers": {
@@ -105,10 +108,10 @@ Add to your `mcp.json`:
 }
 ```
 
-#### Claude Desktop Configuration
+#### Claude Desktop
 
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%/Claude/claude_desktop_config.json`
 
 ```json
 {
@@ -128,59 +131,49 @@ Add to your `mcp.json`:
 ### Environment Variables
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
-| `REQUEST_TIMEOUT` | `10` | HTTP request timeout in seconds |
-| `USER_AGENT` | `Mozilla/5.0...` | Custom User-Agent string |
-| `MAX_RETRIES` | `3` | Maximum retry attempts for failed requests |
-| `CACHE_TTL` | `300` | Cache TTL in seconds (future feature) |
+| --- | --- | --- |
+| `LOG_LEVEL` | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
+| `REQUEST_TIMEOUT` | `10` | Timeout (seconds) for outbound HTTP requests. |
+| `USER_AGENT` | Browser-like UA string | Custom User-Agent presented to Stepstone.de. |
+| `MAX_RETRIES` | `3` | Retry attempts for failed HTTP calls. |
+| `CACHE_TTL` | `300` | Placeholder for future in-memory caching feature. |
 
-## 📖 Usage
+---
+
+## Usage
 
 ### Available Tools
 
 #### `search_jobs`
-Search for job listings using multiple search terms with location-based filtering.
+Runs one or more keyword searches against Stepstone.
 
-**Parameters:**
-- `search_terms` (array, optional): List of job search terms
-  - Default: `["fraud", "betrug", "compliance"]`
-  - Example: `["data scientist", "machine learning", "python developer"]`
-- `zip_code` (string, optional): German 5-digit postal code
-  - Default: `"40210"` (Düsseldorf)
-  - Example: `"10115"` (Berlin), `"80331"` (Munich)
-- `radius` (integer, optional): Search radius in kilometers
-  - Default: `5`
-  - Range: 1-100 km
+**Parameters**
+- `search_terms` *(array of strings, optional)* – Search phrases to query. Defaults to `["fraud", "betrug", "compliance"]`.
+- `zip_code` *(string, optional)* – German 5-digit postal code. Defaults to `"40210"` (Düsseldorf).
+- `radius` *(integer, optional)* – Radius in kilometres around the postal code. Defaults to `5`; must be between 1 and 100.
 
 #### `get_job_details`
-Get detailed information about a specific job from previous search results.
+Fetches one stored job and enriches it with full description and metadata.
 
-**Parameters:**
-- `query` (string, optional): Job title or company name to match against previous search results.
-  - Provide either `query` or `job_index`.
-  - Example: `"AML Specialist"` or `"Deutsche Bank AG"`
-- `job_index` (integer, optional): 1-based index of the job within stored search results.
-  - Provide either `job_index` or `query`.
-  - Example: `1` selects the first job in the saved results.
-- `session_id` (string, optional): Session ID from previous search results.
-  - Defaults to the latest active session when omitted.
-  - Example: `"550e8400-e29b-41d4-a716-446655440000"`
+**Parameters**
+- `job_index` *(integer, optional)* – 1-based index into the most recent session’s results.
+- `job_query` *(string, optional)* – Fuzzy match against stored jobs. Alias `query` is also accepted.
+- `session_id` *(string, optional)* – Explicit session identifier (auto-selects the most recent active session when omitted).
 
-### Example Usage
+> ⚠️ Provide either `job_index` or `job_query`. Supplying both prioritises `job_index`.
 
-#### Basic Search
-```json
+### Example Invocations
+
+```jsonc
+// Basic search
 {
   "tool": "search_jobs",
   "parameters": {
     "search_terms": ["software engineer", "developer"]
   }
 }
-```
 
-#### Location-Specific Search
-```json
+// Location constrained search
 {
   "tool": "search_jobs",
   "parameters": {
@@ -189,44 +182,27 @@ Get detailed information about a specific job from previous search results.
     "radius": 15
   }
 }
-```
 
-#### Specialized Search
-```json
-{
-  "tool": "search_jobs",
-  "parameters": {
-    "search_terms": ["fraud analyst", "compliance officer", "risk management"],
-    "zip_code": "60329",
-    "radius": 25
-  }
-}
-```
-
-#### Follow-up Questions - Get Job Details
-```json
-{
-  "tool": "get_job_details",
-  "parameters": {
-    "query": "AML Specialist",
-    "session_id": "550e8400-e29b-41d4-a716-446655440000"
-  }
-}
-```
-
-#### Follow-up Questions - Get Job Details by Index
-```json
+// Fetch job details by index
 {
   "tool": "get_job_details",
   "parameters": {
     "job_index": 1
   }
 }
+
+// Fetch job details by query string
+{
+  "tool": "get_job_details",
+  "parameters": {
+    "job_query": "AML Specialist",
+    "session_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
 ```
 
 ### Sample Output
 
-#### Search Results
 ```
 Job Search Summary:
 Search Terms: fraud analyst, compliance officer
@@ -238,371 +214,188 @@ Session ID: 550e8400-e29b-41d4-a716-446655440000
 
 1. Senior Fraud Analyst - Digital Banking
    Company: Deutsche Bank AG
-   Location: Frankfurt am Main
    Description: Join our fraud prevention team to analyze transaction patterns...
    Link: https://www.stepstone.de/stellenangebote--Senior-Fraud-Analyst-Frankfurt-Deutsche-Bank-AG--1234567
-
-2. Fraud Detection Specialist (m/w/d)
-   Company: Commerzbank AG
-   Location: Frankfurt am Main
-   Description: Responsible for real-time fraud monitoring and investigation...
-   Link: https://www.stepstone.de/stellenangebote--Fraud-Detection-Specialist-Frankfurt-Commerzbank--1234568
 ```
 
-#### Detailed Job Information
 ```
-Job Details: Senior Fraud Analyst - Digital Banking
-Company: Deutsche Bank AG
-Location: Frankfurt am Main
-Salary: €65,000 - €85,000 per year
-Job Type: Full-time, Permanent
+📋 Job Details: Senior Fraud Analyst - Digital Banking
+🏢 Company: Deutsche Bank AG
+📍 Location: Frankfurt am Main
+💰 Salary: €65,000 - €85,000 per year
+⏰ Employment Type: Full-time, Permanent
 
-Full Description:
+📝 Description:
 Join our fraud prevention team to analyze transaction patterns and develop detection algorithms...
 
-Requirements:
-- Bachelor's degree in Computer Science, Finance, or related field
-- 3+ years experience in fraud detection or financial crime prevention
-- Strong analytical skills with SQL, Python, or R
-- Knowledge of AML regulations and compliance frameworks
-
-Benefits:
-- Competitive salary with annual bonus
-- Flexible working hours and remote work options
-- Professional development opportunities
-- Comprehensive health insurance
-
-Application Instructions:
-Apply directly through the link or send your CV to careers@deutschebank.com
-Contact: recruitment@deutschebank.com
+✅ Requirements:
+  • Bachelor's degree in Computer Science, Finance, or related field
+  • 3+ years experience in fraud detection or financial crime prevention
+  • Strong analytical skills with SQL, Python, or R
+  • Knowledge of AML regulations and compliance frameworks
 ```
 
-## 🏗️ Technical Architecture
+---
 
-### System Design
+## Architecture Overview
+
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   MCP Client    │────│  MCP Stepstone   │────│   Stepstone.de  │
-│ (Claude/Smithery) │    │     Server       │    │   (Job Portal)  │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
+┌────────────────────┐    ┌─────────────────────┐    ┌───────────────────┐
+│    MCP Client      │ ──▶ │  MCP Stepstone      │ ──▶ │   Stepstone.de     │
+│ (Claude/Smithery)  │    │      Server          │    │    Job Portal      │
+└────────────────────┘    └─────────────────────┘    └───────────────────┘
                                 │
-                        ┌──────────────────┐
-                        │  Job Scraper     │
-                        │  - URL Builder   │
-                        │  - HTML Parser   │
-                        │  - Data Cleaner  │
-                        └──────────────────┘
+                        ┌─────────────────────┐
+                        │   Job Scraper       │
+                        │ - URL Builder       │
+                        │ - HTML Parser       │
+                        │ - Data Cleaner      │
+                        └─────────────────────┘
 ```
 
-### Data Flow
-1. **Request**: MCP client sends search request with parameters
-2. **Validation**: Server validates input parameters
-3. **URL Construction**: Builds Stepstone.de search URLs
-4. **Web Scraping**: Fetches and parses job listings
-5. **Data Processing**: Extracts and structures job information
-6. **Session Creation**: Stores search results for follow-up queries
-7. **Response**: Returns formatted results to MCP client
-8. **Follow-up**: Uses session data to retrieve detailed job information
+1. **Request** – MCP client sends tool invocation.
+2. **Validation** – Inputs validated (terms, postal code, radius).
+3. **Search** – URLs constructed and fetched concurrently.
+4. **Processing** – HTML parsed and normalised job entries produced.
+5. **Sessioning** – Results stored in memory for one hour for follow-up queries.
+6. **Response** – Textual summary returned to the MCP client.
+7. **Details** – `get_job_details` fetches the original job page and extracts specifics.
 
-### Key Components
+Key modules:
+- `StepstoneJobScraper` – Builds search URLs, fetches and parses job listings.
+- `JobDetailParser` – Scrapes detailed job pages for salary, requirements, etc.
+- `SessionManager` – Stores search sessions, supports lookup by index or fuzzy match.
+- `stepstone_server.py` – Registers MCP tools/resources and handles tool invocations.
 
-#### StepstoneJobScraper ([`stepstone_server.py:35`](stepstone_server.py:35))
-- **Purpose**: Handles all web scraping operations
-- **Methods**:
-  - `build_search_url()`: Constructs search URLs with parameters
-  - `fetch_job_listings()`: Scrapes job data from Stepstone
-  - `search_jobs()`: Orchestrates multi-term searches
+---
 
-#### JobDetailParser ([`job_detail_parser.py:1`](job_detail_parser.py:1))
-- **Purpose**: Extracts detailed job information from individual job pages
-- **Features**:
-  - Full job description parsing
-  - Salary information extraction
-  - Requirements and qualifications parsing
-  - Company details and contact information
-  - Application instructions extraction
+## Local Development
 
-#### SessionManager ([`session_manager.py:1`](session_manager.py:1))
-- **Purpose**: Manages search sessions for follow-up queries
-- **Features**:
-  - UUID-based session identification
-  - 1-hour TTL for session cleanup
-  - Job result storage and retrieval
-  - Fuzzy matching for job queries
-
-#### MCP Server ([`stepstone_server.py:119`](stepstone_server.py:119))
-- **Purpose**: MCP protocol implementation
-- **Features**:
-  - Tool registration (`search_jobs`, `get_job_details`)
-  - Resource management (`stepstone://search-help`)
-  - Error handling and validation
-  - Logging and monitoring
-
-## 🔒 Security & Best Practices
-
-### Rate Limiting
-- Built-in delays between requests
-- Respectful User-Agent headers
-- Configurable request timeouts
-- Automatic retry with exponential backoff
-
-### Data Privacy
-- No personal data storage
-- Temporary in-memory processing only
-- No cookies or session persistence
-- GDPR-compliant data handling
-
-### Anti-Detection Measures
-- Rotating User-Agent strings
-- Random delays between requests
-- Conservative request frequency
-- Error handling for blocked requests
-
-## ⚡ Performance Optimization
-
-### Session Management
-- In-memory session storage with TTL
-- Automatic cleanup of expired sessions
-- Efficient job matching algorithms
-- Minimal memory footprint
-
-### Caching Strategy (Future Enhancement)
-- Redis-based caching for frequent searches
-- TTL-based cache expiration
-- Cache invalidation on demand
-- Memory usage optimization
-
-### Scaling Considerations
-- Stateless design for horizontal scaling
-- Container-ready deployment
-- Load balancer compatibility
-- Health check endpoints
-
-## 🧪 Development & Testing
-
-### Local Development Setup
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone https://github.com/kdkiss/mcp-stepstone.git
 cd mcp-stepstone
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Create & activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Install development dependencies
+# Install dev tooling
 pip install pytest pytest-asyncio black flake8
 
-# Run tests
-pytest tests/
-
-# Format code
+# Run formatter and linter
 black stepstone_server.py
-
-# Lint code
 flake8 stepstone_server.py
 ```
 
-### Testing the Server
+### Debug Fixtures
+
+A lightweight HTTP server is included to serve bundled HTML fixtures. Start it when adjusting selectors or parsers:
+
 ```bash
-# Test basic functionality
-python stepstone_server.py
-
-# Test with debug logging
-LOG_LEVEL=DEBUG python stepstone_server.py
-
-# Test specific search
-echo '{"search_terms": ["test"], "zip_code": "40210"}' | python stepstone_server.py
-
-# Test follow-up functionality
-python -c "
-import asyncio
-from stepstone_server import handle_call_tool
-
-async def test():
-    # Search for jobs
-    search_result = await handle_call_tool('search_jobs', {
-        'search_terms': ['python developer'],
-        'zip_code': '10115',
-        'max_results': 3
-    })
-    print('Search completed')
-    
-    # Extract session ID from search result
-    import re
-    session_match = re.search(r'Session ID: ([a-f0-9-]+)', search_result)
-    if session_match:
-        session_id = session_match.group(1)
-        # Get job details
-        details = await handle_call_tool('get_job_details', {
-            'query': 'python developer',
-            'session_id': session_id
-        })
-        print('Job details retrieved')
-
-asyncio.run(test())
-"
-```
-
-### Debug Mode
-```bash
-# Run debug server
 python debug_server.py
-
-# Health check
-python health.py
 ```
 
-## 📊 Monitoring & Logging
-
-### Log Levels
-- **DEBUG**: Detailed request/response information
-- **INFO**: General operation status
-- **WARNING**: Non-critical issues
-- **ERROR**: Critical failures and exceptions
-
-### Health Checks
-```bash
-# Check server health
-curl -X POST http://localhost:8080/health
-
-# Expected response
-{"status": "healthy", "timestamp": "2024-01-01T12:00:00Z"}
-```
-
-## 🌍 German Postal Code Reference
-
-| City | Postal Code | Area | Region |
-|------|-------------|------|---------|
-| Berlin | 10115 | Mitte | Berlin |
-| Munich | 80331 | City Center | Bavaria |
-| Hamburg | 20095 | City Center | Hamburg |
-| Cologne | 50667 | City Center | North Rhine-Westphalia |
-| Frankfurt | 60329 | City Center | Hesse |
-| Düsseldorf | 40210 | City Center | North Rhine-Westphalia |
-| Stuttgart | 70173 | City Center | Baden-Württemberg |
-| Leipzig | 04109 | City Center | Saxony |
-| Dresden | 01067 | City Center | Saxony |
-| Hanover | 30159 | City Center | Lower Saxony |
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-#### Server Not Starting
-```bash
-# Check Python version
-python --version  # Should be 3.8+
-
-# Verify dependencies
-pip list | grep -E "(requests|beautifulsoup4|mcp)"
-
-# Check file permissions
-ls -la stepstone_server.py
-```
-
-#### No Jobs Found
-- **Invalid postal code**: Ensure 5-digit German postal code
-- **Too narrow search**: Increase radius or use broader terms
-- **Network issues**: Check internet connectivity
-- **Stepstone changes**: Verify website structure hasn't changed
-
-#### Import Errors
-```bash
-# Install missing dependencies
-pip install -r requirements.txt
-
-# Upgrade pip if needed
-pip install --upgrade pip
-```
-
-#### Permission Errors (Unix)
-```bash
-# Make script executable
-chmod +x stepstone_server.py
-
-# Or run with python explicitly
-python stepstone_server.py
-```
-
-### Debug Mode
-```bash
-# Enable debug logging
-export LOG_LEVEL=DEBUG
-python stepstone_server.py
-
-# Check logs for detailed information
-tail -f /var/log/stepstone-mcp.log
-```
-
-## 🤝 Contributing
-
-### Development Workflow
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/amazing-feature`
-3. Make changes and add tests
-4. Run tests: `pytest tests/`
-5. Format code: `black stepstone_server.py`
-6. Commit changes: `git commit -m 'Add amazing feature'`
-7. Push to branch: `git push origin feature/amazing-feature`
-8. Create Pull Request
-
-### Code Style
-- Follow PEP 8 guidelines
-- Use type hints where appropriate
-- Add docstrings for all functions
-- Include error handling for all external calls
-
-### Testing Guidelines
-- Write unit tests for all new functions
-- Include integration tests for MCP endpoints
-- Test edge cases and error conditions
-- Ensure 80%+ code coverage
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-### Getting Help
-- 📖 Check this README for common issues
-- 🔍 Review logs for error messages
-- 🐛 Report bugs via GitHub Issues
-- 💬 Join our Discord community for discussions
-
-### Resources
-- [MCP Specification](https://github.com/modelcontextprotocol/specification)
-- [Smithery Documentation](https://smithery.ai/docs)
-- [Stepstone.de](https://www.stepstone.de) - Job portal
-- [Python MCP SDK](https://github.com/modelcontextprotocol/python-sdk)
-
-## 📈 Version History
-
-### v1.2.0 (Current)
-- **NEW**: Follow-up questions feature with `get_job_details` tool
-- **NEW**: Session management for tracking search results
-- **NEW**: Detailed job information extraction
-- **NEW**: Job detail parser with comprehensive data extraction
-- **ENHANCED**: Search results now include session IDs for follow-up queries
-
-### v1.1.0
-- Enhanced documentation and examples
-- Added Docker support
-- Improved error handling
-- Added environment variable configuration
-- Enhanced security features
-
-### v1.0.0
-- Initial release
-- Basic job search functionality
-- MCP protocol compliance
-- German postal code support
-- Comprehensive error handling
+Visit `http://127.0.0.1:5000` to inspect the mocked Stepstone pages used in tests.
 
 ---
 
-**Made with ❤️ for the German job market**
+## Testing
+
+The test suite uses mocked network responses to avoid contacting Stepstone.de.
+
+```bash
+pip install -r requirements.txt pytest
+pytest
+```
+
+To validate specific tool flows interactively, you can run `stepstone_server.py` directly or call `handle_call_tool` from a Python shell.
+
+---
+
+## Troubleshooting
+
+### Server Won’t Start
+
+```bash
+python --version            # Expect 3.8+
+pip list | grep -E "(requests|beautifulsoup4|mcp)"
+ls -la stepstone_server.py   # Confirm execute permissions when running directly
+```
+
+### No Jobs Returned
+
+- Verify the postal code is a valid five-digit German PLZ.
+- Increase `radius` or broaden `search_terms`.
+- Confirm internet connectivity.
+- Stepstone layout changes may require updating selectors—use the debug server to compare fixtures.
+
+### Import Errors
+
+```bash
+pip install -r requirements.txt
+pip install --upgrade pip
+```
+
+### Enable Verbose Logging
+
+```bash
+export LOG_LEVEL=DEBUG
+python stepstone_server.py
+```
+
+Logs are emitted to stdout; integrate with your own logging infrastructure if desired.
+
+---
+
+## Contributing
+
+1. Fork the repository and create a feature branch: `git checkout -b feature/my-change`.
+2. Implement your changes and add tests.
+3. Run `pytest` and lint/format the code (`black`, `flake8`).
+4. Open a pull request describing the change.
+
+Coding guidelines:
+- Follow PEP 8 and include type hints where practical.
+- Document public functions with docstrings.
+- Handle network and parsing errors defensively.
+
+---
+
+## Support
+
+- 📖 Consult this README for configuration and usage tips.
+- 🧪 Use the debug server to inspect fixture HTML when selectors break.
+- 🐛 File bugs or feature requests via GitHub Issues.
+- 💬 Join the project’s Discord community (link forthcoming).
+
+---
+
+## Version History
+
+### v1.2.0 (Current)
+- Added `get_job_details` tool for follow-up queries.
+- Introduced session management with one-hour TTL.
+- Enhanced detail parsing for salary, requirements, and benefits.
+- Summaries now include session IDs for easy follow-up.
+
+### v1.1.0
+- Expanded documentation and usage examples.
+- Added Docker support and environment variable configuration.
+- Improved error handling and validation.
+
+### v1.0.0
+- Initial release with multi-term job search and MCP compliance.
+
+---
+
+## License
+
+Distributed under the [MIT License](LICENSE).
+
+---
+
+**Made with ❤️ for the German job market.**
