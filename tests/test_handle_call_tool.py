@@ -82,7 +82,7 @@ def test_handle_call_tool_get_job_details_success(monkeypatch):
         location="Berlin",
         salary=None,
         employment_type="Vollzeit",
-        experience_level=None,
+        experience_level="Senior",
         posted_date=None,
         description="Detailed description",
         requirements=["Skill"],
@@ -103,6 +103,7 @@ def test_handle_call_tool_get_job_details_success(monkeypatch):
 
     text = response[0].text
     assert "📋 Job Details: Fraud Analyst" in text
+    assert "🧠 Experience Level: Senior" in text
     assert "Apply: https://example.com/job/1" in text
 
 
