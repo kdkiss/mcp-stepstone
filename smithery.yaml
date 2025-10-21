@@ -7,7 +7,7 @@ metadata:
 runtime: python
 build:
   python:
-    version: "3.11"
+    version: "3.12"
     requirements:
       - requirements.txt
 
@@ -16,7 +16,7 @@ build:
 # raw STDIO entry point.
 startCommand:
   type: http
-  command: python
+  command: .venv/bin/python
   args:
     - stepstone_http_server.py
 
