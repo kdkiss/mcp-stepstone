@@ -622,6 +622,20 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                         req_str = str(req) if req is not None else ""
                     formatted_output.append(f"  • {req_str}")
 
+            if details.responsibilities:
+                formatted_output.append("")
+                formatted_output.append("🛠 Responsibilities:")
+                for responsibility in details.responsibilities:
+                    if isinstance(responsibility, dict):
+                        resp_str = json.dumps(responsibility, ensure_ascii=False)
+                    elif isinstance(responsibility, list):
+                        resp_str = ", ".join(str(item) for item in responsibility)
+                    else:
+                        resp_str = (
+                            str(responsibility) if responsibility is not None else ""
+                        )
+                    formatted_output.append(f"  • {resp_str}")
+
             if details.benefits:
                 formatted_output.append("")
                 formatted_output.append("🎁 Benefits:")
