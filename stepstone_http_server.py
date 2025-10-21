@@ -25,7 +25,7 @@ logger = logging.getLogger("stepstone-http-server")
 
 
 def _cors_headers(
-    origin: bytes | None,
+    origin: bytes | None = None,
     allow_headers: bytes | None = None,
 ) -> list[tuple[bytes, bytes]]:
     """Headers applied to every HTTP response."""
