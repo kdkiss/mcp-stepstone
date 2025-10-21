@@ -17,9 +17,10 @@ build:
 # raw STDIO entry point.
 startCommand:
   type: http
-  command: .venv/bin/python
+  command: /app/.venv/bin/python
   args:
-    - stepstone_http_server.py
+    - -m
+    - stepstone_http_server
 
 # Session configuration documented at
 # https://smithery.ai/docs/build/session-config. Providing it inline keeps the
