@@ -350,7 +350,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
         # preserving order. Any non-string entries are ignored with a warning so
         # that the user receives a clear validation message if everything was
         # filtered out.
-        cleaned_terms: list[str] = []
+        sanitized_terms: list[str] = []
         seen_terms: set[str] = set()
         for term in raw_terms:
             if not isinstance(term, str):
@@ -364,9 +364,9 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
 
             if normalized not in seen_terms:
                 seen_terms.add(normalized)
-                cleaned_terms.append(normalized)
+                sanitized_terms.append(normalized)
 
-        if not cleaned_terms:
+        if not sanitized_terms:
             return [
                 types.TextContent(
                     type="text",
@@ -374,7 +374,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 )
             ]
 
-        search_terms = cleaned_terms
+        search_terms = sanitized_terms
 
         # Validate location inputs
         if not isinstance(zip_code, str) or len(zip_code) != 5 or not zip_code.isdigit():
