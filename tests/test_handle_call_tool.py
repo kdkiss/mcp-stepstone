@@ -109,6 +109,8 @@ def test_handle_call_tool_get_job_details_success(monkeypatch):
     assert "🧠 Experience Level: Senior" in text
     assert "🛠 Responsibilities:" in text
     assert "Task" in text
+    assert "🧾 Application Instructions:" in text
+    assert "Apply online" in text
     assert "Apply: https://example.com/job/1" in text
     assert "Company Profile" in text
 
