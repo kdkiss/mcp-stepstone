@@ -16,7 +16,7 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from starlette.routing import Mount, Route
+from starlette.routing import Route
 from starlette.types import Receive, Scope, Send
 
 import stepstone_server
@@ -55,6 +55,60 @@ def _merge_headers(
 
 
 
+def _update_accept_header(headers: list[tuple[bytes, bytes]]) -> None:
+    """Ensure the Accept header allows both JSON and SSE responses."""
+
+    required_types = ("application/json", "text/event-stream")
+    header_index = next(
+        (idx for idx, (name, _) in enumerate(headers) if name.lower() == b"accept"),
+        None,
+    )
+
+    if header_index is None:
+        headers.append((b"accept", b", ".join(value.encode("latin-1") for value in required_types)))
+        return
+
+    name, value = headers[header_index]
+    media_types = [token.strip() for token in value.decode("latin-1").split(",") if token.strip()]
+
+    def satisfies(token: str, target: str) -> bool:
+        base = token.split(";", 1)[0].strip()
+        if base == "*/*":
+            return False
+        if base.endswith("/*"):
+            prefix = base.split("/", 1)[0]
+            return target.startswith(f"{prefix}/")
+        return base == target
+
+    updated = False
+    for required in required_types:
+        if not any(satisfies(token, required) for token in media_types):
+            media_types.append(required)
+            updated = True
+
+    if updated:
+        new_value = ", ".join(media_types).encode("latin-1")
+        headers[header_index] = (name, new_value)
+
+
+def _ensure_required_headers(scope: Scope) -> Scope:
+    """Return a scope copy with Accept and Content-Type headers normalised."""
+
+    headers = list(scope.get("headers", []))
+    headers = [(name, value) for name, value in headers]
+
+    _update_accept_header(headers)
+
+    method = scope.get("method", "").upper()
+    has_content_type = any(name.lower() == b"content-type" for name, _ in headers)
+    if method == "POST" and not has_content_type:
+        headers.append((b"content-type", b"application/json"))
+
+    updated_scope = dict(scope)
+    updated_scope["headers"] = headers
+    return updated_scope
+
+
 def create_app() -> Starlette:
     """Create a Starlette application exposing the MCP server over HTTP."""
 
@@ -64,30 +118,35 @@ def create_app() -> Starlette:
         stateless=False,
     )
 
-    async def streamable_http_endpoint(scope: Scope, receive: Receive, send: Send):
-        if scope["type"] != "http":
-            raise RuntimeError("Unsupported ASGI scope type")
+    class StreamableEndpoint:
+        def __init__(self, manager: StreamableHTTPSessionManager):
+            self._manager = manager
 
-        method = scope.get("method", "GET").upper()
-        if method == "OPTIONS":
-            logger.debug("Handling CORS preflight for %s", scope.get("path"))
-            await send(
-                {
-                    "type": "http.response.start",
-                    "status": 204,
-                    "headers": _cors_preflight_headers(),
-                }
-            )
-            await send({"type": "http.response.body", "body": b""})
-            return
+        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+            if scope["type"] != "http":
+                raise RuntimeError("Unsupported ASGI scope type")
 
-        async def send_with_cors(message):
-            if message["type"] == "http.response.start":
-                headers = message.setdefault("headers", [])
-                message["headers"] = _merge_headers(headers, _cors_headers())
-            await send(message)
+            method = scope.get("method", "GET").upper()
+            if method == "OPTIONS":
+                logger.debug("Handling CORS preflight for %s", scope.get("path"))
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 204,
+                        "headers": _cors_preflight_headers(),
+                    }
+                )
+                await send({"type": "http.response.body", "body": b""})
+                return
 
-        await session_manager.handle_request(scope, receive, send_with_cors)
+            async def send_with_cors(message):
+                if message["type"] == "http.response.start":
+                    headers = message.setdefault("headers", [])
+                    message["headers"] = _merge_headers(headers, _cors_headers())
+                await send(message)
+
+            normalized_scope = _ensure_required_headers(scope)
+            await self._manager.handle_request(normalized_scope, receive, send_with_cors)
 
     async def homepage(request: Request):
         response = JSONResponse(
@@ -106,9 +165,12 @@ def create_app() -> Starlette:
         async with session_manager.run():
             yield
 
+    streamable_endpoint = StreamableEndpoint(session_manager)
+
     routes = [
         Route("/", homepage, methods=["GET"]),
-        Mount("/mcp", app=streamable_http_endpoint),
+        Route("/mcp", streamable_endpoint, methods=["GET", "POST", "DELETE", "OPTIONS"]),
+        Route("/mcp/", streamable_endpoint, methods=["GET", "POST", "DELETE", "OPTIONS"]),
     ]
 
     return Starlette(routes=routes, lifespan=lifespan)

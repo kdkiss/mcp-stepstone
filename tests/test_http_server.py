@@ -46,3 +46,25 @@ def test_mcp_session_header_is_exposed():
 
     assert response.headers["access-control-expose-headers"] == "mcp-session-id"
     assert "mcp-session-id" in response.headers
+
+
+def test_initialize_without_accept_header_succeeds():
+    app = stepstone_http_server.create_app()
+
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 123,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "pytest", "version": "0.0.0"},
+        },
+    }
+
+    with TestClient(app) as client:
+        response = client.post("/mcp", json=payload)
+
+    assert response.status_code == 200
+    assert response.headers["mcp-session-id"]
+    assert response.headers["content-type"].startswith("text/event-stream")
