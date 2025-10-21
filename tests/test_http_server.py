@@ -3,7 +3,7 @@ from starlette.testclient import TestClient
 import stepstone_http_server
 
 
-def test_cors_preflight_allows_any_origin():
+def test_cors_preflight_respects_request_origin():
     app = stepstone_http_server.create_app()
 
     with TestClient(app) as client:
@@ -12,13 +12,19 @@ def test_cors_preflight_allows_any_origin():
             headers={
                 "Origin": "https://example.com",
                 "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "mcp-session-id, content-type",
             },
         )
 
     assert response.status_code in (200, 204)
-    assert response.headers["access-control-allow-origin"] == "*"
+    assert response.headers["access-control-allow-origin"] == "https://example.com"
+    assert response.headers["access-control-allow-credentials"] == "true"
     assert "GET" in response.headers["access-control-allow-methods"]
-    assert response.headers["access-control-allow-headers"] == "*"
+    assert (
+        response.headers["access-control-allow-headers"]
+        == "mcp-session-id, content-type"
+    )
+    assert response.headers["vary"] == "origin"
 
 
 def test_homepage_reports_status():
@@ -31,7 +37,29 @@ def test_homepage_reports_status():
     payload = response.json()
     assert payload["status"] == "ok"
     assert payload["endpoints"]["mcp"] == "/mcp"
-    assert response.headers["access-control-allow-origin"] == "*"
+    assert response.headers["access-control-allow-origin"] == "https://foo"
+    assert response.headers["access-control-allow-credentials"] == "true"
+    assert response.headers["vary"] == "origin"
+
+
+def test_homepage_preflight_includes_cors_headers():
+    app = stepstone_http_server.create_app()
+
+    with TestClient(app) as client:
+        response = client.options(
+            "/",
+            headers={
+                "Origin": "https://foo",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+
+    assert response.status_code in (200, 204)
+    assert response.headers["access-control-allow-origin"] == "https://foo"
+    assert response.headers["access-control-allow-headers"] == "content-type"
+    assert response.headers["access-control-allow-credentials"] == "true"
+    assert response.headers["vary"] == "origin"
 
 
 def test_mcp_session_header_is_exposed():
@@ -46,6 +74,8 @@ def test_mcp_session_header_is_exposed():
 
     assert response.headers["access-control-expose-headers"] == "mcp-session-id"
     assert "mcp-session-id" in response.headers
+    assert response.headers["access-control-allow-origin"] == "*"
+    assert "access-control-allow-credentials" not in response.headers
 
 
 def test_initialize_without_accept_header_succeeds():
@@ -68,3 +98,5 @@ def test_initialize_without_accept_header_succeeds():
     assert response.status_code == 200
     assert response.headers["mcp-session-id"]
     assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["access-control-allow-origin"] == "*"
+    assert "access-control-allow-credentials" not in response.headers

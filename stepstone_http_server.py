@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 from starlette.types import Receive, Scope, Send
 
@@ -24,19 +24,33 @@ import stepstone_server
 logger = logging.getLogger("stepstone-http-server")
 
 
-def _cors_headers() -> list[tuple[bytes, bytes]]:
+def _cors_headers(
+    origin: bytes | None,
+    allow_headers: bytes | None = None,
+) -> list[tuple[bytes, bytes]]:
     """Headers applied to every HTTP response."""
-    return [
-        (b"access-control-allow-origin", b"*"),
+
+    headers: list[tuple[bytes, bytes]] = [
+        (b"access-control-allow-origin", origin or b"*"),
         (b"access-control-allow-methods", b"GET,POST,DELETE,OPTIONS"),
-        (b"access-control-allow-headers", b"*"),
+        (b"access-control-allow-headers", allow_headers or b"*"),
         (b"access-control-expose-headers", b"mcp-session-id"),
     ]
 
+    if origin:
+        headers.append((b"access-control-allow-credentials", b"true"))
+        headers.append((b"vary", b"origin"))
 
-def _cors_preflight_headers() -> list[tuple[bytes, bytes]]:
+    return headers
+
+
+def _cors_preflight_headers(
+    origin: bytes | None,
+    allow_headers: bytes | None,
+) -> list[tuple[bytes, bytes]]:
     """Headers returned for CORS preflight responses."""
-    headers = list(_cors_headers())
+
+    headers = list(_cors_headers(origin, allow_headers))
     headers.append((b"access-control-max-age", b"86400"))
     return headers
 
@@ -127,13 +141,30 @@ def create_app() -> Starlette:
                 raise RuntimeError("Unsupported ASGI scope type")
 
             method = scope.get("method", "GET").upper()
+            origin_header = next(
+                (
+                    value
+                    for name, value in scope.get("headers", [])
+                    if name.lower() == b"origin"
+                ),
+                None,
+            )
+            request_headers = next(
+                (
+                    value
+                    for name, value in scope.get("headers", [])
+                    if name.lower() == b"access-control-request-headers"
+                ),
+                None,
+            )
+
             if method == "OPTIONS":
                 logger.debug("Handling CORS preflight for %s", scope.get("path"))
                 await send(
                     {
                         "type": "http.response.start",
                         "status": 204,
-                        "headers": _cors_preflight_headers(),
+                        "headers": _cors_preflight_headers(origin_header, request_headers),
                     }
                 )
                 await send({"type": "http.response.body", "body": b""})
@@ -142,22 +173,37 @@ def create_app() -> Starlette:
             async def send_with_cors(message):
                 if message["type"] == "http.response.start":
                     headers = message.setdefault("headers", [])
-                    message["headers"] = _merge_headers(headers, _cors_headers())
+                    message["headers"] = _merge_headers(
+                        headers, _cors_headers(origin_header)
+                    )
                 await send(message)
 
             normalized_scope = _ensure_required_headers(scope)
             await self._manager.handle_request(normalized_scope, receive, send_with_cors)
 
     async def homepage(request: Request):
-        response = JSONResponse(
-            {
-                "status": "ok",
-                "message": "Stepstone MCP HTTP endpoint",
-                "endpoints": {"mcp": "/mcp"},
-            }
+        origin = request.headers.get("origin")
+        origin_bytes = origin.encode("latin-1") if origin else None
+        allow_headers = request.headers.get("access-control-request-headers")
+        allow_headers_bytes = (
+            allow_headers.encode("latin-1") if allow_headers else None
         )
-        for key, value in _cors_headers():
-            response.headers[key.decode("ascii")] = value.decode("ascii")
+
+        if request.method == "OPTIONS":
+            response: Response = Response(status_code=204)
+            cors_headers = _cors_preflight_headers(origin_bytes, allow_headers_bytes)
+        else:
+            response = JSONResponse(
+                {
+                    "status": "ok",
+                    "message": "Stepstone MCP HTTP endpoint",
+                    "endpoints": {"mcp": "/mcp"},
+                }
+            )
+            cors_headers = _cors_headers(origin_bytes)
+
+        for key, value in cors_headers:
+            response.headers[key.decode("ascii")] = value.decode("latin-1")
         return response
 
     @asynccontextmanager
@@ -168,7 +214,7 @@ def create_app() -> Starlette:
     streamable_endpoint = StreamableEndpoint(session_manager)
 
     routes = [
-        Route("/", homepage, methods=["GET"]),
+        Route("/", homepage, methods=["GET", "OPTIONS"]),
         Route("/mcp", streamable_endpoint, methods=["GET", "POST", "DELETE", "OPTIONS"]),
         Route("/mcp/", streamable_endpoint, methods=["GET", "POST", "DELETE", "OPTIONS"]),
     ]
