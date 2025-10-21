@@ -11,6 +11,7 @@ import json
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import asdict, is_dataclass
 from typing import Dict, List
 from urllib.parse import quote
 
@@ -648,6 +649,49 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                     else:
                         benefit_str = str(benefit) if benefit is not None else ""
                     formatted_output.append(f"  • {benefit_str}")
+
+            company_details = details.company_details
+            if company_details:
+                if is_dataclass(company_details):
+                    company_info = {
+                        key: value
+                        for key, value in asdict(company_details).items()
+                        if value
+                    }
+                elif isinstance(company_details, dict):
+                    company_info = {
+                        str(key): str(value)
+                        for key, value in company_details.items()
+                        if value
+                    }
+                else:
+                    company_info = {"details": str(company_details)}
+
+                if company_info:
+                    formatted_output.append("")
+                    formatted_output.append("🏢 Company Profile:")
+
+                    description = company_info.pop("description", None)
+                    if description:
+                        formatted_output.append(
+                            f"   Description: {description}"
+                        )
+
+                    website = company_info.pop("website", None)
+                    if website:
+                        formatted_output.append(f"   Website: {website}")
+
+                    for key in ["size", "industry", "headquarters"]:
+                        value = company_info.pop(key, None)
+                        if value:
+                            formatted_output.append(
+                                f"   {key.replace('_', ' ').title()}: {value}"
+                            )
+
+                    for key, value in company_info.items():
+                        formatted_output.append(
+                            f"   {key.replace('_', ' ').title()}: {value}"
+                        )
 
             if details.contact_info:
                 formatted_output.append("")

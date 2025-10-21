@@ -9,6 +9,27 @@ from datetime import datetime
 import uuid
 
 @dataclass
+class CompanyDetails:
+    """Structured company profile information."""
+
+    description: Optional[str] = None
+    website: Optional[str] = None
+    size: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, str]:
+        """Convert to a clean dictionary, omitting empty values."""
+        return {
+            key: value
+            for key, value in {
+                "description": self.description,
+                "website": self.website,
+                "size": self.size,
+            }.items()
+            if value
+        }
+
+
+@dataclass
 class JobDetails:
     """Comprehensive job details structure"""
     title: str
@@ -22,7 +43,7 @@ class JobDetails:
     requirements: List[str]
     responsibilities: List[str]
     benefits: List[str]
-    company_details: Dict[str, str]
+    company_details: Optional[CompanyDetails]
     application_instructions: str
     contact_info: Dict[str, str]
     job_url: str
@@ -42,7 +63,9 @@ class JobDetails:
             "requirements": self.requirements,
             "responsibilities": self.responsibilities,
             "benefits": self.benefits,
-            "company_details": self.company_details,
+            "company_details": self.company_details.to_dict()
+            if self.company_details
+            else {},
             "application_instructions": self.application_instructions,
             "contact_info": self.contact_info,
             "job_url": self.job_url

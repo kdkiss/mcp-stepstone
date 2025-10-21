@@ -7,7 +7,7 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from job_details_models import JobDetails
+from job_details_models import JobDetails, CompanyDetails
 from session_manager import session_manager
 from stepstone_server import JobDetailParser, handle_call_tool, scraper
 
@@ -88,7 +88,10 @@ def test_handle_call_tool_get_job_details_success(monkeypatch):
         requirements=["Skill"],
         responsibilities=["Task"],
         benefits=["Benefit"],
-        company_details={},
+        company_details=CompanyDetails(
+            description="Leading security firm",
+            website="https://secure.example.com",
+        ),
         application_instructions="Apply online",
         contact_info={},
         job_url="https://example.com/job/1",
@@ -107,6 +110,7 @@ def test_handle_call_tool_get_job_details_success(monkeypatch):
     assert "🛠 Responsibilities:" in text
     assert "Task" in text
     assert "Apply: https://example.com/job/1" in text
+    assert "Company Profile" in text
 
 
 def test_handle_call_tool_get_job_details_no_match(monkeypatch):

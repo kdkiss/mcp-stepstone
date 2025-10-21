@@ -1,11 +1,10 @@
 import sys
 from pathlib import Path
-from types import SimpleNamespace
-
 import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+from job_details_models import CompanyDetails, JobDetails  # noqa: E402
 from stepstone_server import handle_call_tool, session_manager, JobDetailParser  # noqa: E402
 
 
@@ -21,7 +20,7 @@ def anyio_backend():
 
 @pytest.fixture
 def parser_spy(monkeypatch):
-    details = SimpleNamespace(
+    details = JobDetails(
         title="Detailed Title",
         company="Example Co",
         location="Remote",
@@ -33,6 +32,11 @@ def parser_spy(monkeypatch):
         requirements=["Requirement"],
         responsibilities=["Responsibility"],
         benefits=["Benefit"],
+        company_details=CompanyDetails(
+            description="We craft great products",
+            website="https://example.com/company",
+        ),
+        application_instructions="Apply via portal",
         contact_info={"email": "jobs@example.com"},
         job_url="http://example.com/details",
     )
@@ -68,6 +72,9 @@ async def test_get_job_details_by_index_uses_latest_session(parser_spy):
     assert "Detailed Title" in result[0].text
     assert "🛠 Responsibilities:" in result[0].text
     assert "Responsibility" in result[0].text
+    assert "🏢 Company Profile:" in result[0].text
+    assert "Description: We craft great products" in result[0].text
+    assert "Website: https://example.com/company" in result[0].text
     assert called_urls == ["http://example.com/job"]
 
 

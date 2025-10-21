@@ -8,7 +8,12 @@ import logging
 from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
 import requests
-from job_details_models import JobDetails, PageParseError, NetworkError
+from job_details_models import (
+    CompanyDetails,
+    JobDetails,
+    PageParseError,
+    NetworkError,
+)
 
 logger = logging.getLogger("stepstone-server")
 
@@ -77,7 +82,10 @@ class JobDetailParser:
             # Extract company and application information
             logger.debug("Extracting company and application information...")
             company_details = self._extract_company_details(soup)
-            logger.debug(f"Company details extracted: {company_details}")
+            logger.debug(
+                "Company details extracted: %s",
+                company_details.to_dict() if company_details else {},
+            )
             
             application_instructions = self._extract_application_instructions(soup)
             logger.debug(f"Application instructions extracted: {len(application_instructions)} chars")
@@ -99,7 +107,9 @@ class JobDetailParser:
                 "requirements": [str(r) for r in requirements],
                 "responsibilities": [str(r) for r in responsibilities],
                 "benefits": [str(b) for b in benefits],
-                "company_details": {str(k): str(v) for k, v in company_details.items()},
+                "company_details": company_details
+                if company_details and company_details.to_dict()
+                else None,
                 "application_instructions": str(application_instructions),
                 "contact_info": {str(k): str(v) for k, v in contact_info.items()},
                 "job_url": str(url)
@@ -385,36 +395,40 @@ class JobDetailParser:
         
         return benefits
     
-    def _extract_company_details(self, soup: BeautifulSoup) -> Dict[str, str]:
-        """Extract company information"""
-        company_details = {}
-        
-        # Company description
-        company_desc_selectors = [
+    def _extract_company_details(self, soup: BeautifulSoup) -> CompanyDetails:
+        """Extract structured company information."""
+        description: Optional[str] = None
+        for selector in [
             '[data-testid="company-description"]',
             '[class*="company-description"]',
-            '[class*="CompanyDescription"]'
-        ]
-        
-        for selector in company_desc_selectors:
+            '[class*="CompanyDescription"]',
+        ]:
             desc_elem = soup.select_one(selector)
             if desc_elem:
-                company_details['description'] = desc_elem.get_text(strip=True)
+                text_value = desc_elem.get_text(strip=True)
+                if text_value:
+                    description = text_value
                 break
-        
-        # Company size
+
+        size: Optional[str] = None
+        text_content = soup.get_text()
         size_pattern = r'(\d+(?:-\d+)?\s*(?:Mitarbeiter|Employees))'
-        text = soup.get_text()
-        match = re.search(size_pattern, text, re.IGNORECASE)
-        if match:
-            company_details['size'] = match.group(1)
-        
-        # Company website
+        size_match = re.search(size_pattern, text_content, re.IGNORECASE)
+        if size_match:
+            size_value = size_match.group(1).strip()
+            if size_value:
+                size = size_value
+
+        website: Optional[str] = None
         website_elem = soup.find('a', href=re.compile(r'https?://(?!www\.stepstone\.de)'))
-        if website_elem:
-            company_details['website'] = website_elem['href']
-        
-        return company_details
+        if website_elem and website_elem.get('href'):
+            website = website_elem['href']
+
+        return CompanyDetails(
+            description=description,
+            website=website,
+            size=size,
+        )
     
     def _extract_application_instructions(self, soup: BeautifulSoup) -> str:
         """Extract application instructions"""
