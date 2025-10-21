@@ -10,13 +10,15 @@ import os
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(__file__))
 
+from stepstone_server import StepstoneJobScraper
+
+
 def test_imports():
     """Test if all required modules can be imported"""
     try:
         import requests
         import bs4
         import mcp
-        from stepstone_server import StepstoneJobScraper
         print("✓ All imports successful")
         return True
     except ImportError as e:

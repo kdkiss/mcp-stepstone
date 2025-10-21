@@ -41,3 +41,9 @@ testProfile:
   # Reuse the primary session configuration so Smithery's automated scanners can
   # immediately determine how to execute the server during validation.
   sessionConfig: *hosted_session_config
+# Automated checks executed by Smithery during validation.
+tests:
+  - name: Smoke test server configuration
+    command: python
+    args:
+      - test-server.py
