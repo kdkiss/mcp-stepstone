@@ -7,7 +7,7 @@ import asyncio
 import logging
 from mcp.server.models import InitializationOptions
 from mcp.server import NotificationOptions, Server
-from mcp.server.stdio import stdio_server
+from stdio_transport import adaptive_stdio_server
 from mcp.types import Tool, TextContent
 import mcp.types as types
 
@@ -55,7 +55,7 @@ async def main():
         ),
     )
     
-    async with stdio_server() as (read_stream, write_stream):
+    async with adaptive_stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, options)
 
 if __name__ == "__main__":
