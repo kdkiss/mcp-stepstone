@@ -206,6 +206,12 @@ def create_app() -> Starlette:
             response.headers[key.decode("ascii")] = value.decode("latin-1")
         return response
 
+    async def healthcheck(request: Request):
+        response = JSONResponse({"status": "ok"})
+        for key, value in _cors_headers():
+            response.headers[key.decode("ascii")] = value.decode("ascii")
+        return response
+
     @asynccontextmanager
     async def lifespan(app):
         async with session_manager.run():
@@ -215,6 +221,8 @@ def create_app() -> Starlette:
 
     routes = [
         Route("/", homepage, methods=["GET", "OPTIONS"]),
+        Route("/health", healthcheck, methods=["GET"]),
+        Route("/healthz", healthcheck, methods=["GET"]),
         Route("/mcp", streamable_endpoint, methods=["GET", "POST", "DELETE", "OPTIONS"]),
         Route("/mcp/", streamable_endpoint, methods=["GET", "POST", "DELETE", "OPTIONS"]),
     ]
