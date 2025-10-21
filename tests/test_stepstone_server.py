@@ -74,11 +74,15 @@ import os
 import select
 import subprocess
 import sys
+from pathlib import Path
 import time
+
+_SERVER_SCRIPT = Path(__file__).resolve().parents[1] / "stepstone_server.py"
+
 
 def _start_server():
     return subprocess.Popen(
-        [sys.executable, 'stepstone_server.py'],
+        [sys.executable, str(_SERVER_SCRIPT)],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
