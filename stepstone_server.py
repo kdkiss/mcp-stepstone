@@ -591,6 +591,11 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                     f"⏰ Employment Type: {str(details.employment_type)}"
                 )
 
+            if details.experience_level:
+                formatted_output.append(
+                    f"🧠 Experience Level: {str(details.experience_level)}"
+                )
+
             if details.posted_date:
                 formatted_output.append(f"📅 Posted: {str(details.posted_date)}")
 
