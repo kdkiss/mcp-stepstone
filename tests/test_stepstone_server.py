@@ -1,15 +1,18 @@
+import asyncio
+import json
+import os
+import select
+import subprocess
+import sys
+import time
+from pathlib import Path
+
 import pytest
 
 import stepstone_server
 
 
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.mark.anyio("asyncio")
-async def test_search_jobs_no_results(monkeypatch, caplog):
+def test_search_jobs_no_results(monkeypatch, caplog):
     search_terms = ["term1", "term2"]
 
     def fake_search_jobs(terms, zip_code, radius):
@@ -24,9 +27,11 @@ async def test_search_jobs_no_results(monkeypatch, caplog):
     monkeypatch.setattr(stepstone_server.session_manager, "create_session", fake_create_session)
 
     with caplog.at_level("INFO"):
-        response = await stepstone_server.handle_call_tool(
-            "search_jobs",
-            {"search_terms": search_terms, "zip_code": "40210", "radius": 5},
+        response = asyncio.run(
+            stepstone_server.handle_call_tool(
+                "search_jobs",
+                {"search_terms": search_terms, "zip_code": "40210", "radius": 5},
+            )
         )
 
     assert response
@@ -39,8 +44,7 @@ async def test_search_jobs_no_results(monkeypatch, caplog):
     assert any("returned no results" in record.getMessage() for record in caplog.records)
 
 
-@pytest.mark.anyio("asyncio")
-async def test_search_jobs_invalid_terms(monkeypatch, caplog):
+def test_search_jobs_invalid_terms(monkeypatch, caplog):
     def fake_search_jobs(*args, **kwargs):
         pytest.fail("search_jobs should not be invoked when validation fails")
 
@@ -53,9 +57,11 @@ async def test_search_jobs_invalid_terms(monkeypatch, caplog):
     )
 
     with caplog.at_level("WARNING"):
-        response = await stepstone_server.handle_call_tool(
-            "search_jobs",
-            {"search_terms": [" ", 123], "zip_code": "40210", "radius": 5},
+        response = asyncio.run(
+            stepstone_server.handle_call_tool(
+                "search_jobs",
+                {"search_terms": [" ", 123], "zip_code": "40210", "radius": 5},
+            )
         )
 
     assert response
@@ -69,14 +75,6 @@ async def test_search_jobs_invalid_terms(monkeypatch, caplog):
     assert any("Ignoring empty search term entry" in msg for msg in logged_messages)
 
 
-import json
-import os
-import select
-import subprocess
-import sys
-from pathlib import Path
-import time
-
 _SERVER_SCRIPT = Path(__file__).resolve().parents[1] / "stepstone_server.py"
 
 
@@ -88,11 +86,13 @@ def _start_server():
         stderr=subprocess.PIPE,
     )
 
+
 def _send_content_length(proc, message):
     payload = json.dumps(message).encode('utf-8')
     header = f"Content-Length: {len(payload)}\r\n\r\n".encode('ascii')
     proc.stdin.write(header + payload)
     proc.stdin.flush()
+
 
 def _read_content_length_response(stream, timeout=5):
     fd = stream.fileno()
@@ -221,4 +221,3 @@ def test_initialize_supports_newline_delimited_json():
     finally:
         proc.kill()
         proc.communicate(timeout=1)
-

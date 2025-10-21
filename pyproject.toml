@@ -24,7 +24,6 @@ dependencies = [
 [project.optional-dependencies]
 test = [
   "pytest>=7.0",
-  "pytest-anyio>=0.12",
 ]
 
 [tool.setuptools]
