@@ -10,6 +10,7 @@ build:
     version: "3.12"
     requirements:
       - requirements.txt
+      - requirements-dev.txt
 
 # Hosted environments require CORS-friendly HTTP transports, so expose the
 # MCP implementation through the bundled Starlette adapter instead of the
