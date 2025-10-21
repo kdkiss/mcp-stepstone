@@ -62,6 +62,18 @@ def test_homepage_preflight_includes_cors_headers():
     assert response.headers["vary"] == "origin"
 
 
+def test_health_endpoint_includes_cors_headers():
+    app = stepstone_http_server.create_app()
+
+    with TestClient(app) as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "*"
+    assert response.headers["access-control-allow-methods"]
+    assert response.headers["access-control-expose-headers"] == "mcp-session-id"
+
+
 def test_mcp_session_header_is_exposed():
     app = stepstone_http_server.create_app()
 
