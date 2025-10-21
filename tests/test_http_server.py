@@ -67,4 +67,4 @@ def test_initialize_without_accept_header_succeeds():
 
     assert response.status_code == 200
     assert response.headers["mcp-session-id"]
-    assert response.headers["content-type"].startswith("text/event-stream")
+    assert response.headers["content-type"].startswith("application/json")
