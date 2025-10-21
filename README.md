@@ -301,6 +301,22 @@ python debug_server.py
 
 Visit `http://127.0.0.1:5000` to inspect the mocked Stepstone pages used in tests.
 
+### HTTP Transport Adapter
+
+Some hosted MCP environments (such as Smithery) require an HTTP endpoint with
+liberal CORS headers instead of the default STDIO transport. The project ships a
+small Starlette-based adapter that exposes the existing server over the
+streamable HTTP protocol:
+
+```bash
+python stepstone_http_server.py
+```
+
+The server listens on `0.0.0.0:8000` by default and responds to preflight
+requests with `Access-Control-Allow-Origin: *`. Adjust the `HOST` and `PORT`
+environment variables when deploying to platforms that mandate specific
+interfaces or ports.
+
 ---
 
 ## Testing
