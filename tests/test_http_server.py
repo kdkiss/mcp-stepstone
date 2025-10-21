@@ -36,7 +36,8 @@ def test_homepage_reports_status():
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ok"
-    assert payload["endpoints"]["mcp"] == "/mcp"
+    assert payload["endpoints"]["mcp"].endswith("/mcp")
+    assert payload["endpoints"]["mcpPath"] == "/mcp"
     assert response.headers["access-control-allow-origin"] == "https://foo"
     assert response.headers["access-control-allow-credentials"] == "true"
     assert response.headers["vary"] == "origin"
