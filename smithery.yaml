@@ -17,6 +17,7 @@ build:
 # raw STDIO entry point.
 startCommand:
   type: http
+  port: 8000
   command: /app/.venv/bin/python
   args:
     - -m
