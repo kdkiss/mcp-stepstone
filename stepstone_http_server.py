@@ -193,11 +193,16 @@ def create_app() -> Starlette:
             response: Response = Response(status_code=204)
             cors_headers = _cors_preflight_headers(origin_bytes, allow_headers_bytes)
         else:
+            # Provide an absolute MCP endpoint URL so hosted environments can
+            # connect without guessing the server's origin. Some scanners only
+            # consume the absolute URL, so keep the relative path for backwards
+            # compatibility alongside the fully-qualified endpoint.
+            mcp_url = str(request.url_for("mcp"))
             response = JSONResponse(
                 {
                     "status": "ok",
                     "message": "Stepstone MCP HTTP endpoint",
-                    "endpoints": {"mcp": "/mcp"},
+                    "endpoints": {"mcp": mcp_url, "mcpPath": "/mcp"},
                 }
             )
             cors_headers = _cors_headers(origin_bytes)
@@ -223,8 +228,18 @@ def create_app() -> Starlette:
         Route("/", homepage, methods=["GET", "OPTIONS"]),
         Route("/health", healthcheck, methods=["GET"]),
         Route("/healthz", healthcheck, methods=["GET"]),
-        Route("/mcp", streamable_endpoint, methods=["GET", "POST", "DELETE", "OPTIONS"]),
-        Route("/mcp/", streamable_endpoint, methods=["GET", "POST", "DELETE", "OPTIONS"]),
+        Route(
+            "/mcp",
+            streamable_endpoint,
+            methods=["GET", "POST", "DELETE", "OPTIONS"],
+            name="mcp",
+        ),
+        Route(
+            "/mcp/",
+            streamable_endpoint,
+            methods=["GET", "POST", "DELETE", "OPTIONS"],
+            name="mcp_slash",
+        ),
     ]
 
     return Starlette(routes=routes, lifespan=lifespan)
