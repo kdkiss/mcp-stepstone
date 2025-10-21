@@ -337,7 +337,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
         zip_code = arguments.get("zip_code", "40210")
         radius = arguments.get("radius", 5)
 
-        # Validate parameters
+        # Validate search terms
         if not isinstance(raw_terms, list) or not raw_terms:
             return [
                 types.TextContent(
@@ -345,29 +345,6 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                     text="Error: search_terms must be a non-empty list of strings",
                 )
             ]
-
-        normalized_terms: list[str] = []
-        for term in search_terms:
-            if not isinstance(term, str):
-                return [
-                    types.TextContent(
-                        type="text",
-                        text="Error: search_terms must contain only non-empty strings",
-                    )
-                ]
-
-            stripped = term.strip()
-            if not stripped:
-                return [
-                    types.TextContent(
-                        type="text",
-                        text="Error: search_terms must contain only non-empty strings",
-                    )
-                ]
-
-            normalized_terms.append(stripped)
-
-        if not isinstance(zip_code, str) or len(zip_code) != 5 or not zip_code.isdigit():
 
         # Normalize search terms by removing blank entries and duplicates while
         # preserving order. Any non-string entries are ignored with a warning so
@@ -399,7 +376,8 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
 
         search_terms = cleaned_terms
 
-        if not isinstance(zip_code, str) or len(zip_code) != 5:
+        # Validate location inputs
+        if not isinstance(zip_code, str) or len(zip_code) != 5 or not zip_code.isdigit():
             return [
                 types.TextContent(
                     type="text",
@@ -419,13 +397,13 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             # Perform the job search without blocking the event loop
             logger.info(
                 "Searching jobs with terms: %s, zip: %s, radius: %s",
-                normalized_terms,
+                search_terms,
                 zip_code,
                 radius,
             )
             results = await asyncio.to_thread(
                 scraper.search_jobs,
-                normalized_terms,
+                search_terms,
                 zip_code,
                 radius,
             )
@@ -444,7 +422,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 )
 
             session = session_manager.create_session(
-                all_jobs, normalized_terms, zip_code, radius
+                all_jobs, search_terms, zip_code, radius
             )
 
             # Format results for display
@@ -468,7 +446,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
 
             # Add summary
             summary = f"Job Search Summary:\n"
-            summary += f"Search Terms: {', '.join(normalized_terms)}\n"
+            summary += f"Search Terms: {', '.join(search_terms)}\n"
             summary += f"Location: {zip_code} (±{radius}km)\n"
             summary += f"Total Jobs Found: {total_jobs}\n"
             summary += f"Session ID: {session}\n"
