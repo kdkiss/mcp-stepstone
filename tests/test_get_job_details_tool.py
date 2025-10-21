@@ -75,6 +75,8 @@ async def test_get_job_details_by_index_uses_latest_session(parser_spy):
     assert "🏢 Company Profile:" in result[0].text
     assert "Description: We craft great products" in result[0].text
     assert "Website: https://example.com/company" in result[0].text
+    assert "🧾 Application Instructions:" in result[0].text
+    assert "Apply via portal" in result[0].text
     assert called_urls == ["http://example.com/job"]
 
 

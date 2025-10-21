@@ -442,15 +442,41 @@ class JobDetailParser:
         
         for selector in app_selectors:
             app_section = soup.select_one(selector)
-            if app_section:
-                return app_section.get_text(strip=True, separator='\n')
-        
+            if not app_section:
+                continue
+
+            # If the selector matched a heading (e.g. "Bewerbung"),
+            # capture the content that follows the heading until the next
+            # heading of the same level.
+            if app_section.name in {"h2", "h3", "h4"}:
+                collected: list[str] = []
+                sibling = app_section.find_next_sibling()
+                while sibling:
+                    if sibling.name in {"h2", "h3", "h4"}:
+                        break
+                    text_value = sibling.get_text("\n", strip=True)
+                    if text_value:
+                        collected.append(text_value)
+                    sibling = sibling.find_next_sibling()
+
+                text = "\n".join(collected).strip()
+            else:
+                text = app_section.get_text("\n", strip=True)
+
+            if text:
+                normalized_lines = [line.strip() for line in text.splitlines() if line.strip()]
+                if normalized_lines:
+                    return "\n".join(normalized_lines)
+
         # Look for apply buttons or links
-        apply_buttons = soup.find_all(['a', 'button'], string=re.compile(r'(?i)(bewerben|apply|jetzt bewerben)'))
+        apply_buttons = soup.find_all([
+            'a',
+            'button',
+        ], string=re.compile(r'(?i)(bewerben|apply|jetzt bewerben)'))
         if apply_buttons:
             return "Click the apply button/link to submit your application"
-        
-        return "Application instructions not provided"
+
+        return ""
     
     def _extract_contact_info(self, soup: BeautifulSoup) -> Dict[str, str]:
         """Extract contact information"""

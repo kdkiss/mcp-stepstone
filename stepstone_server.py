@@ -708,6 +708,23 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                     )
                 formatted_output.append(contact_str)
 
+            instructions_text = (
+                str(details.application_instructions)
+                if details.application_instructions is not None
+                else ""
+            )
+            instructions_text = instructions_text.strip()
+            if instructions_text:
+                formatted_output.append("")
+                formatted_output.append("🧾 Application Instructions:")
+                instruction_lines = [
+                    line.strip() for line in instructions_text.splitlines() if line.strip()
+                ]
+                if instruction_lines:
+                    formatted_output.extend(f"   {line}" for line in instruction_lines)
+                else:
+                    formatted_output.append(f"   {instructions_text}")
+
             formatted_output.append("")
             apply_url = str(details.job_url or job["link"])
             formatted_output.append(f"🔗 Apply: {apply_url}")
