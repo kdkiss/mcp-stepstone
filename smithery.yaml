@@ -39,6 +39,18 @@ sessionConfig:
           REQUEST_TIMEOUT: "10"
 
 testProfile:
-  # Keep the external file for local development convenience and parity with
-  # the inline profile.
-  sessionConfigPath: session_configs/hosted-test.json
+  # Inline the session configuration so Smithery's automated scanners can
+  # immediately determine how to execute the server during validation.
+  sessionConfig:
+    version: 1
+    default: hosted
+    profiles:
+      hosted:
+        transport:
+          type: stdio
+          command: python
+          args:
+            - stepstone_server.py
+          env:
+            LOG_LEVEL: INFO
+            REQUEST_TIMEOUT: "10"
