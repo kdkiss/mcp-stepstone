@@ -365,6 +365,42 @@ python stepstone_server.py
 
 Logs are emitted to stdout; integrate with your own logging infrastructure if desired.
 
+### Smithery Scanner Cannot Initialize Connection
+
+If the Smithery CLI reports repeated `HTTP error: This operation was aborted` or
+`McpError: MCP error -32001: Request timed out` messages while scanning the
+server, the MCP process started successfully but the JSON-RPC handshake failed.
+Typical causes and remedies:
+
+1. **CORS headers missing** – Ensure your HTTP transport returns permissive CORS
+   headers:
+   ```javascript
+   res.setHeader("Access-Control-Allow-Origin", "*");
+   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+   ```
+2. **Slow initialization** – Increase client timeouts (example Smithery
+   `mcp.json` snippet):
+   ```json
+   {
+     "mcpServers": {
+       "stepstone-job-search": {
+         "type": "streamable-http",
+         "url": "http://localhost:3000/mcp",
+         "initTimeout": 30000,
+         "timeout": 60000
+       }
+     }
+   }
+   ```
+3. **Endpoint mismatch** – Confirm the server is reachable where the client
+   expects it (for example, `curl -v http://localhost:3000/mcp`). If Smithery
+   logs show `HTTP POST → undefined`, double-check the configured URL or
+   transport binding.
+
+When debugging, start the server manually via `npx -y @smithery/cli serve` to
+observe whether it exits early or logs binding issues.
+
 ---
 
 ## Contributing
