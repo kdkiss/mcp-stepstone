@@ -25,7 +25,7 @@ startCommand:
 # https://smithery.ai/docs/build/session-config. Providing it inline keeps the
 # primary configuration self-contained while still allowing external files for
 # local overrides.
-sessionConfig:
+sessionConfig: &hosted_session_config
   version: 1
   default: hosted
   profiles:
@@ -38,16 +38,6 @@ sessionConfig:
           REQUEST_TIMEOUT: "10"
 
 testProfile:
-  # Inline the session configuration so Smithery's automated scanners can
+  # Reuse the primary session configuration so Smithery's automated scanners can
   # immediately determine how to execute the server during validation.
-  sessionConfig:
-    version: 1
-    default: hosted
-    profiles:
-      hosted:
-        transport:
-          type: http
-          url: http://127.0.0.1:8000/mcp
-          env:
-            LOG_LEVEL: INFO
-            REQUEST_TIMEOUT: "10"
+  sessionConfig: *hosted_session_config
