@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "default": "hosted",
+  "profiles": {
+    "hosted": {
+      "transport": {
+        "type": "stdio",
+        "command": "python",
+        "args": ["stepstone_server.py"],
+        "env": {
+          "LOG_LEVEL": "INFO",
+          "REQUEST_TIMEOUT": "10"
+        }
+      }
+    }
+  }
+}
