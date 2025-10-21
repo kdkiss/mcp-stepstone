@@ -4,11 +4,8 @@
   "profiles": {
     "hosted": {
       "transport": {
-        "type": "stdio",
-        "command": "python",
-        "args": [
-          "stepstone_server.py"
-        ],
+        "type": "http",
+        "url": "http://127.0.0.1:8000/mcp",
         "env": {
           "LOG_LEVEL": "INFO",
           "REQUEST_TIMEOUT": "10"

@@ -11,14 +11,14 @@ build:
     requirements:
       - requirements.txt
 
-# Declare how Smithery should execute the MCP server. The explicit type
-# mirrors the `transport.type` used in session profiles and makes it easier
-# to reason about how the server is invoked across different environments.
+# Hosted environments require CORS-friendly HTTP transports, so expose the
+# MCP implementation through the bundled Starlette adapter instead of the
+# raw STDIO entry point.
 startCommand:
-  type: stdio
+  type: http
   command: python
   args:
-    - stepstone_server.py
+    - stepstone_http_server.py
 
 # Session configuration documented at
 # https://smithery.ai/docs/build/session-config. Providing it inline keeps the
@@ -30,10 +30,8 @@ sessionConfig:
   profiles:
     hosted:
       transport:
-        type: stdio
-        command: python
-        args:
-          - stepstone_server.py
+        type: http
+        url: http://127.0.0.1:8000/mcp
         env:
           LOG_LEVEL: INFO
           REQUEST_TIMEOUT: "10"
@@ -47,10 +45,8 @@ testProfile:
     profiles:
       hosted:
         transport:
-          type: stdio
-          command: python
-          args:
-            - stepstone_server.py
+          type: http
+          url: http://127.0.0.1:8000/mcp
           env:
             LOG_LEVEL: INFO
             REQUEST_TIMEOUT: "10"
