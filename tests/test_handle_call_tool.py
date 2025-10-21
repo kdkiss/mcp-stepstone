@@ -104,6 +104,8 @@ def test_handle_call_tool_get_job_details_success(monkeypatch):
     text = response[0].text
     assert "📋 Job Details: Fraud Analyst" in text
     assert "🧠 Experience Level: Senior" in text
+    assert "🛠 Responsibilities:" in text
+    assert "Task" in text
     assert "Apply: https://example.com/job/1" in text
 
 

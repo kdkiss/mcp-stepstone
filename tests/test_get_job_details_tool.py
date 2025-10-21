@@ -27,9 +27,11 @@ def parser_spy(monkeypatch):
         location="Remote",
         salary=None,
         employment_type=None,
+        experience_level=None,
         posted_date=None,
         description="Comprehensive role description",
         requirements=["Requirement"],
+        responsibilities=["Responsibility"],
         benefits=["Benefit"],
         contact_info={"email": "jobs@example.com"},
         job_url="http://example.com/details",
@@ -64,6 +66,8 @@ async def test_get_job_details_by_index_uses_latest_session(parser_spy):
 
     assert result
     assert "Detailed Title" in result[0].text
+    assert "🛠 Responsibilities:" in result[0].text
+    assert "Responsibility" in result[0].text
     assert called_urls == ["http://example.com/job"]
 
 
@@ -143,3 +147,4 @@ async def test_get_job_details_uses_query_when_provided(parser_spy):
 
     assert response
     assert "Detailed Title" in response[0].text
+    assert "🛠 Responsibilities:" in response[0].text
