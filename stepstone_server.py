@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import re
+from asyncio import TimeoutError as AsyncioTimeoutError, timeout as async_timeout
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, is_dataclass
 from typing import Dict, List
@@ -27,6 +28,7 @@ import mcp.types as types
 # Import new modules
 from job_detail_parser import JobDetailParser
 from session_manager import session_manager
+from config_utils import get_operation_timeout, get_request_timeout
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -43,8 +45,10 @@ class StepstoneJobScraper:
 
     def fetch_job_listings(self, url: str) -> List[Dict[str, str]]:
         """Fetch job listings from a Stepstone URL"""
+        timeout = get_request_timeout()
+
         try:
-            response = requests.get(url, headers=self.headers, timeout=10)
+            response = requests.get(url, headers=self.headers, timeout=timeout)
             response.raise_for_status()
 
             soup = BeautifulSoup(response.text, "html.parser")
@@ -402,12 +406,34 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 zip_code,
                 radius,
             )
-            results = await asyncio.to_thread(
-                scraper.search_jobs,
-                search_terms,
-                zip_code,
-                radius,
-            )
+            operation_timeout = get_operation_timeout()
+
+            try:
+                async with async_timeout(operation_timeout):
+                    results = await asyncio.to_thread(
+                        scraper.search_jobs,
+                        search_terms,
+                        zip_code,
+                        radius,
+                    )
+            except AsyncioTimeoutError:
+                logger.warning(
+                    "Job search timed out after %.2f seconds for terms=%s zip=%s radius=%s",
+                    operation_timeout,
+                    search_terms,
+                    zip_code,
+                    radius,
+                )
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=(
+                            "Stepstone.de took too long to respond (after "
+                            f"{operation_timeout:.0f} seconds). Please try again with fewer search terms "
+                            "or adjust the radius."
+                        ),
+                    )
+                ]
 
             # Create session for search results
             all_jobs = []
@@ -562,7 +588,28 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
 
             # Parse job details
             parser = JobDetailParser()
-            details = await asyncio.to_thread(parser.parse_job_details, job["link"])
+            operation_timeout = get_operation_timeout()
+
+            try:
+                async with async_timeout(operation_timeout):
+                    details = await asyncio.to_thread(
+                        parser.parse_job_details, job["link"]
+                    )
+            except AsyncioTimeoutError:
+                logger.warning(
+                    "Job detail fetch timed out after %.2f seconds for url=%s",
+                    operation_timeout,
+                    job["link"],
+                )
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=(
+                            "Fetching detailed information took too long and timed out after "
+                            f"{operation_timeout:.0f} seconds. Please try again in a moment."
+                        ),
+                    )
+                ]
 
             if not details:
                 return [

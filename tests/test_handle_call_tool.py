@@ -7,6 +7,7 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+import stepstone_server
 from job_details_models import JobDetails, CompanyDetails
 from session_manager import session_manager
 from stepstone_server import JobDetailParser, handle_call_tool, scraper
@@ -65,6 +66,21 @@ def test_handle_call_tool_search_jobs_error(monkeypatch):
     response = asyncio.run(handle_call_tool("search_jobs", {"search_terms": ["fraud"]}))
 
     assert "Error performing job search: network down" in response[0].text
+
+
+def test_handle_call_tool_search_jobs_timeout(monkeypatch):
+    monkeypatch.setattr(scraper, "search_jobs", lambda *args, **kwargs: {"fraud": []})
+    monkeypatch.setenv("REQUEST_TIMEOUT", "1")
+
+    async def slow_to_thread(func, *args, **kwargs):
+        await asyncio.sleep(1.2)
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(stepstone_server.asyncio, "to_thread", slow_to_thread)
+
+    response = asyncio.run(handle_call_tool("search_jobs", {"search_terms": ["fraud"]}))
+
+    assert "took too long to respond" in response[0].text
 
 
 def test_handle_call_tool_get_job_details_success(monkeypatch):
@@ -158,3 +174,32 @@ def test_handle_call_tool_get_job_details_error(monkeypatch):
     ))
 
     assert "Error retrieving job details: parse failure" in response[0].text
+
+
+def test_handle_call_tool_get_job_details_timeout(monkeypatch):
+    job = {
+        "title": "Fraud Analyst",
+        "company": "Secure Corp",
+        "description": "Investigate fraud cases",
+        "link": "https://example.com/job/1",
+    }
+    session_id = session_manager.create_session([job], ["fraud"], "40210", 5)
+
+    def parse_should_not_run(self, url):  # pragma: no cover - defensive guard
+        raise AssertionError("parse_job_details should not execute during timeout test")
+
+    monkeypatch.setattr(JobDetailParser, "parse_job_details", parse_should_not_run)
+    monkeypatch.setenv("REQUEST_TIMEOUT", "1")
+
+    async def slow_to_thread(func, *args, **kwargs):
+        await asyncio.sleep(1.2)
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(stepstone_server.asyncio, "to_thread", slow_to_thread)
+
+    response = asyncio.run(handle_call_tool(
+        "get_job_details",
+        {"query": "Fraud Analyst", "session_id": session_id},
+    ))
+
+    assert "Fetching detailed information took too long" in response[0].text

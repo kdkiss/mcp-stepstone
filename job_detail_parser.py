@@ -8,6 +8,8 @@ import logging
 from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
 import requests
+
+from config_utils import get_request_timeout
 from job_details_models import (
     CompanyDetails,
     JobDetails,
@@ -25,8 +27,10 @@ class JobDetailParser:
     
     def fetch_job_page(self, url: str) -> str:
         """Fetch the HTML content of a job page"""
+        timeout = get_request_timeout()
+
         try:
-            response = requests.get(url, headers=self.headers, timeout=15)
+            response = requests.get(url, headers=self.headers, timeout=timeout)
             response.raise_for_status()
             return response.text
         except requests.RequestException as e:

@@ -133,7 +133,7 @@ docker run -it --rm mcp-stepstone
 | Variable | Default | Description |
 | --- | --- | --- |
 | `LOG_LEVEL` | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
-| `REQUEST_TIMEOUT` | `10` | Timeout (seconds) for outbound HTTP requests. |
+| `REQUEST_TIMEOUT` | `10` | Timeout (seconds) for outbound Stepstone HTTP requests and the upper bound for long-running tool calls (the server stops waiting shortly before this limit to avoid client timeouts). |
 | `USER_AGENT` | Browser-like UA string | Custom User-Agent presented to Stepstone.de. |
 | `MAX_RETRIES` | `3` | Retry attempts for failed HTTP calls. |
 | `CACHE_TTL` | `300` | Placeholder for future in-memory caching feature. |
