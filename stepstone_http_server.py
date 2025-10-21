@@ -114,7 +114,7 @@ def create_app() -> Starlette:
 
     session_manager = StreamableHTTPSessionManager(
         stepstone_server.server,
-        json_response=False,
+        json_response=True,
         stateless=False,
     )
 
