@@ -1,0 +1,3 @@
+-r requirements.txt
+pytest>=7.0
+pytest-anyio>=0.12
