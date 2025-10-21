@@ -11,7 +11,7 @@ authors = [
   { name = "StepStone" }
 ]
 license = { text = "MIT" }
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
   "requests>=2.31.0",
   "beautifulsoup4>=4.12.0",
@@ -21,4 +21,14 @@ dependencies = [
 [project.optional-dependencies]
 test = [
   "pytest>=7.0",
+]
+
+[tool.setuptools]
+py-modules = [
+  "debug_server",
+  "health",
+  "job_detail_parser",
+  "job_details_models",
+  "session_manager",
+  "stepstone_server",
 ]
