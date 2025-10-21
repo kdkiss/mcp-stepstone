@@ -6,7 +6,9 @@
       "transport": {
         "type": "stdio",
         "command": "python",
-        "args": ["stepstone_server.py"],
+        "args": [
+          "stepstone_server.py"
+        ],
         "env": {
           "LOG_LEVEL": "INFO",
           "REQUEST_TIMEOUT": "10"
