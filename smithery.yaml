@@ -14,3 +14,5 @@ startCommand:
   command: python
   args:
     - stepstone_server.py
+testProfile:
+  sessionConfig: session_configs/hosted-test.json
