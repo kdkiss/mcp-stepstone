@@ -346,34 +346,11 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 )
             ]
 
-        normalized_terms: list[str] = []
-        for term in search_terms:
-            if not isinstance(term, str):
-                return [
-                    types.TextContent(
-                        type="text",
-                        text="Error: search_terms must contain only non-empty strings",
-                    )
-                ]
-
-            stripped = term.strip()
-            if not stripped:
-                return [
-                    types.TextContent(
-                        type="text",
-                        text="Error: search_terms must contain only non-empty strings",
-                    )
-                ]
-
-            normalized_terms.append(stripped)
-
-        if not isinstance(zip_code, str) or len(zip_code) != 5 or not zip_code.isdigit():
-
         # Normalize search terms by removing blank entries and duplicates while
         # preserving order. Any non-string entries are ignored with a warning so
         # that the user receives a clear validation message if everything was
         # filtered out.
-        cleaned_terms: list[str] = []
+        sanitized_terms: list[str] = []
         seen_terms: set[str] = set()
         for term in raw_terms:
             if not isinstance(term, str):
@@ -387,9 +364,9 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
 
             if normalized not in seen_terms:
                 seen_terms.add(normalized)
-                cleaned_terms.append(normalized)
+                sanitized_terms.append(normalized)
 
-        if not cleaned_terms:
+        if not sanitized_terms:
             return [
                 types.TextContent(
                     type="text",
@@ -397,9 +374,9 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 )
             ]
 
-        search_terms = cleaned_terms
+        search_terms = sanitized_terms
 
-        if not isinstance(zip_code, str) or len(zip_code) != 5:
+        if not isinstance(zip_code, str) or len(zip_code) != 5 or not zip_code.isdigit():
             return [
                 types.TextContent(
                     type="text",
@@ -419,13 +396,13 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             # Perform the job search without blocking the event loop
             logger.info(
                 "Searching jobs with terms: %s, zip: %s, radius: %s",
-                normalized_terms,
+                sanitized_terms,
                 zip_code,
                 radius,
             )
             results = await asyncio.to_thread(
                 scraper.search_jobs,
-                normalized_terms,
+                sanitized_terms,
                 zip_code,
                 radius,
             )
@@ -438,13 +415,13 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             if not all_jobs:
                 logger.info(
                     "Job search returned no results for terms=%s zip=%s radius=%s",
-                    search_terms,
+                    sanitized_terms,
                     zip_code,
                     radius,
                 )
 
             session = session_manager.create_session(
-                all_jobs, normalized_terms, zip_code, radius
+                all_jobs, sanitized_terms, zip_code, radius
             )
 
             # Format results for display
@@ -468,7 +445,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
 
             # Add summary
             summary = f"Job Search Summary:\n"
-            summary += f"Search Terms: {', '.join(normalized_terms)}\n"
+            summary += f"Search Terms: {', '.join(sanitized_terms)}\n"
             summary += f"Location: {zip_code} (±{radius}km)\n"
             summary += f"Total Jobs Found: {total_jobs}\n"
             summary += f"Session ID: {session}\n"
