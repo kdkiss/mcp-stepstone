@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-stepstone"
+version = "0.1.0"
+description = "Tools and utilities for interacting with StepStone job listings via MCP."
+readme = "README.md"
+authors = [
+  { name = "StepStone" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+  "requests>=2.31.0",
+  "beautifulsoup4>=4.12.0",
+  "mcp>=1.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=7.0",
+]
+
+[tool.setuptools]
+py-modules = [
+  "debug_server",
+  "health",
+  "job_detail_parser",
+  "job_details_models",
+  "session_manager",
+  "stepstone_server",
+]
