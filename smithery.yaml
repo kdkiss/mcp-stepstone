@@ -15,4 +15,21 @@ startCommand:
   args:
     - stepstone_server.py
 testProfile:
-  sessionConfig: session_configs/hosted-test.json
+  # Inline copy of the hosted test configuration so automated scanners can
+  # discover the intended stdio transport without needing to resolve a
+  # repository-relative path.
+  sessionConfig:
+    version: 1
+    default: hosted
+    profiles:
+      hosted:
+        transport:
+          type: stdio
+          command: python
+          args:
+            - stepstone_server.py
+          env:
+            LOG_LEVEL: INFO
+            REQUEST_TIMEOUT: "10"
+  # Keep the external file for local development convenience.
+  sessionConfigPath: session_configs/hosted-test.json
