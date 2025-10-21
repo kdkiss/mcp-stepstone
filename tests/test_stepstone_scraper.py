@@ -7,7 +7,7 @@ import pytest
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from job_detail_parser import JobDetailParser
-from job_details_models import JobDetails
+from job_details_models import JobDetails, CompanyDetails
 from stepstone_server import StepstoneJobScraper
 
 
@@ -123,10 +123,14 @@ def test_parse_job_details_extracts_expected_fields(monkeypatch):
     assert details.requirements == ["5+ years experience", "SQL expertise"]
     assert details.responsibilities == ["Monitor alerts", "Coordinate investigations"]
     assert details.benefits == ["Remote work", "Annual bonus"]
-    assert details.company_details["description"] == "We fight fraud."
-    assert details.company_details["website"] == "https://company.example.com"
+    assert isinstance(details.company_details, CompanyDetails)
+    assert details.company_details.description == "We fight fraud."
+    assert details.company_details.website == "https://company.example.com"
     assert details.application_instructions == "Submit via portal."
     assert details.contact_info["email"] == "jobs@example.com"
     assert details.contact_info["phone"] == "+49 123 456789"
     assert details.contact_info["contact_person"] == "Anna Schmidt"
     assert details.job_url == "https://www.stepstone.de/job/123"
+
+    details_dict = details.to_dict()
+    assert details_dict["company_details"]["description"] == "We fight fraud."
