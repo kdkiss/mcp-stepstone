@@ -30,6 +30,7 @@ def _cors_headers() -> list[tuple[bytes, bytes]]:
         (b"access-control-allow-origin", b"*"),
         (b"access-control-allow-methods", b"GET,POST,DELETE,OPTIONS"),
         (b"access-control-allow-headers", b"*"),
+        (b"access-control-expose-headers", b"mcp-session-id"),
     ]
 
 

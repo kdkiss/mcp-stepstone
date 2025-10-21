@@ -32,3 +32,17 @@ def test_homepage_reports_status():
     assert payload["status"] == "ok"
     assert payload["endpoints"]["mcp"] == "/mcp"
     assert response.headers["access-control-allow-origin"] == "*"
+
+
+def test_mcp_session_header_is_exposed():
+    app = stepstone_http_server.create_app()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/mcp/",
+            headers={"Accept": "application/json, text/event-stream"},
+            json={"jsonrpc": "2.0", "id": "noop", "method": "ping"},
+        )
+
+    assert response.headers["access-control-expose-headers"] == "mcp-session-id"
+    assert "mcp-session-id" in response.headers
