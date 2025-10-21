@@ -10,26 +10,35 @@ build:
     version: "3.11"
     requirements:
       - requirements.txt
+
+# Declare how Smithery should execute the MCP server. The explicit type
+# mirrors the `transport.type` used in session profiles and makes it easier
+# to reason about how the server is invoked across different environments.
 startCommand:
+  type: stdio
   command: python
   args:
     - stepstone_server.py
+
+# Session configuration documented at
+# https://smithery.ai/docs/build/session-config. Providing it inline keeps the
+# primary configuration self-contained while still allowing external files for
+# local overrides.
+sessionConfig:
+  version: 1
+  default: hosted
+  profiles:
+    hosted:
+      transport:
+        type: stdio
+        command: python
+        args:
+          - stepstone_server.py
+        env:
+          LOG_LEVEL: INFO
+          REQUEST_TIMEOUT: "10"
+
 testProfile:
-  # Inline copy of the hosted test configuration so automated scanners can
-  # discover the intended stdio transport without needing to resolve a
-  # repository-relative path.
-  sessionConfig:
-    version: 1
-    default: hosted
-    profiles:
-      hosted:
-        transport:
-          type: stdio
-          command: python
-          args:
-            - stepstone_server.py
-          env:
-            LOG_LEVEL: INFO
-            REQUEST_TIMEOUT: "10"
-  # Keep the external file for local development convenience.
+  # Keep the external file for local development convenience and parity with
+  # the inline profile.
   sessionConfigPath: session_configs/hosted-test.json
