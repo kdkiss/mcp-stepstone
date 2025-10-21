@@ -1,3 +1,4 @@
+import asyncio
 import sys
 from pathlib import Path
 import pytest
@@ -11,11 +12,6 @@ from stepstone_server import handle_call_tool, session_manager, JobDetailParser 
 @pytest.fixture(autouse=True)
 def _reset_sessions():
     session_manager.sessions.clear()
-
-
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
 
 
 @pytest.fixture
@@ -50,8 +46,7 @@ def parser_spy(monkeypatch):
     return called_urls, details
 
 
-@pytest.mark.anyio("asyncio")
-async def test_get_job_details_by_index_uses_latest_session(parser_spy):
+def test_get_job_details_by_index_uses_latest_session(parser_spy):
     called_urls, _ = parser_spy
     job = {
         "title": "Backend Engineer",
@@ -61,11 +56,13 @@ async def test_get_job_details_by_index_uses_latest_session(parser_spy):
     }
     session_manager.create_session(results=[job], search_terms=["backend"], zip_code="10115", radius=10)
 
-    result = await handle_call_tool(
-        "get_job_details",
-        {
-            "job_index": 1,
-        },
+    result = asyncio.run(
+        handle_call_tool(
+            "get_job_details",
+            {
+                "job_index": 1,
+            },
+        )
     )
 
     assert result
@@ -80,61 +77,62 @@ async def test_get_job_details_by_index_uses_latest_session(parser_spy):
     assert called_urls == ["http://example.com/job"]
 
 
-@pytest.mark.anyio("asyncio")
-async def test_get_job_details_requires_identifier(parser_spy):
-    response = await handle_call_tool("get_job_details", {})
+def test_get_job_details_requires_identifier(parser_spy):
+    response = asyncio.run(handle_call_tool("get_job_details", {}))
     assert response[0].text.startswith("Error: provide either a query string or a job_index")
 
 
-@pytest.mark.anyio("asyncio")
-async def test_get_job_details_validates_job_index(parser_spy):
-    response = await handle_call_tool(
-        "get_job_details",
-        {
-            "job_index": 0,
-        },
+def test_get_job_details_validates_job_index(parser_spy):
+    response = asyncio.run(
+        handle_call_tool(
+            "get_job_details",
+            {
+                "job_index": 0,
+            },
+        )
     )
     assert response[0].text == "Error: job_index must be an integer greater than or equal to 1"
 
 
-@pytest.mark.anyio("asyncio")
-async def test_get_job_details_handles_missing_session(parser_spy):
-    response = await handle_call_tool(
-        "get_job_details",
-        {
-            "query": "Engineer",
-            "session_id": "missing-session",
-        },
+def test_get_job_details_handles_missing_session(parser_spy):
+    response = asyncio.run(
+        handle_call_tool(
+            "get_job_details",
+            {
+                "query": "Engineer",
+                "session_id": "missing-session",
+            },
+        )
     )
 
     assert "Session not found or expired" in response[0].text
 
 
-@pytest.mark.anyio("asyncio")
-async def test_get_job_details_reports_missing_index(parser_spy):
-    response = await handle_call_tool(
-        "get_job_details",
-        {
-            "session_id": session_manager.create_session(
-                results=[{
-                    "title": "Data Scientist",
-                    "company": "DataCorp",
-                    "description": "Analyze data",
-                    "link": "http://example.com/datasci",
-                }],
-                search_terms=["data"],
-                zip_code="10115",
-                radius=10,
-            ),
-            "job_index": 2,
-        },
+def test_get_job_details_reports_missing_index(parser_spy):
+    response = asyncio.run(
+        handle_call_tool(
+            "get_job_details",
+            {
+                "session_id": session_manager.create_session(
+                    results=[{
+                        "title": "Data Scientist",
+                        "company": "DataCorp",
+                        "description": "Analyze data",
+                        "link": "http://example.com/datasci",
+                    }],
+                    search_terms=["data"],
+                    zip_code="10115",
+                    radius=10,
+                ),
+                "job_index": 2,
+            },
+        )
     )
 
     assert "No job found at the requested index" in response[0].text
 
 
-@pytest.mark.anyio("asyncio")
-async def test_get_job_details_uses_query_when_provided(parser_spy):
+def test_get_job_details_uses_query_when_provided(parser_spy):
     session_manager.create_session(
         results=[{
             "title": "Cloud Architect",
@@ -147,11 +145,13 @@ async def test_get_job_details_uses_query_when_provided(parser_spy):
         radius=10,
     )
 
-    response = await handle_call_tool(
-        "get_job_details",
-        {
-            "query": "Cloud Architect",
-        },
+    response = asyncio.run(
+        handle_call_tool(
+            "get_job_details",
+            {
+                "query": "Cloud Architect",
+            },
+        )
     )
 
     assert response
