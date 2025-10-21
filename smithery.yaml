@@ -4,12 +4,13 @@ metadata:
   description: >-
     Model Context Protocol server that runs Stepstone.de job searches and
     fetches detailed listings for MCP clients.
+runtime: python
 build:
   python:
     version: "3.11"
     requirements:
       - requirements.txt
-entrypoint:
+startCommand:
   command: python
   args:
     - stepstone_server.py
